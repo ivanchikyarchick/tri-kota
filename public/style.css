@@ -18,6 +18,80 @@ body, html {
     box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+    <style>
+        /* ── МОДАЛКА ТРЕНУВАННЯ ── */
+        #training-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            z-index: 4000;
+            align-items: center;
+            justify-content: center;
+        }
+        #training-modal.open { display: flex; }
+        .training-box {
+            background: #1a1a2e;
+            border: 2px solid #4da6ff;
+            border-radius: 16px;
+            padding: 36px 44px;
+            text-align: center;
+            min-width: 320px;
+        }
+        .training-box h2 {
+            color: #fff;
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        .training-box p {
+            color: #aaa;
+            font-size: 14px;
+            margin-bottom: 24px;
+        }
+        .diff-btns { display: flex; gap: 12px; justify-content: center; margin-bottom: 28px; }
+        .diff-btn {
+            padding: 12px 22px;
+            border-radius: 10px;
+            border: 2px solid #555;
+            background: transparent;
+            color: #ccc;
+            font-size: 15px;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .diff-btn:hover  { transform: scale(1.06); }
+        .diff-btn.active { color: #fff; }
+        .diff-btn[data-d="easy"]   { border-color: #4dff88; }
+        .diff-btn[data-d="easy"].active   { background: #4dff8822; color: #4dff88; }
+        .diff-btn[data-d="medium"]{ border-color: #ffd633; }
+        .diff-btn[data-d="medium"].active { background: #ffd63322; color: #ffd633; }
+        .diff-btn[data-d="hard"]  { border-color: #ff4d4d; }
+        .diff-btn[data-d="hard"].active   { background: #ff4d4d22; color: #ff4d4d; }
+        .training-start-btn {
+            padding: 13px 40px;
+            font-size: 17px;
+            border-radius: 10px;
+            border: 2px solid #4da6ff;
+            background: #4da6ff22;
+            color: #4da6ff;
+            cursor: pointer;
+            transition: all .2s;
+            margin-right: 10px;
+        }
+        .training-start-btn:hover { background: #4da6ff44; transform: scale(1.04); }
+        .training-cancel-btn {
+            padding: 13px 20px;
+            font-size: 15px;
+            border-radius: 10px;
+            border: 2px solid #555;
+            background: transparent;
+            color: #888;
+            cursor: pointer;
+            transition: all .2s;
+        }
+        .training-cancel-btn:hover { color: #ccc; border-color: #888; }
+    </style>
+
 #online-counter::before {
     content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%;
     background-color: #00ffcc; box-shadow: 0 0 10px #00ffcc;
