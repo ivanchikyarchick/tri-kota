@@ -11,7 +11,7 @@ app.use(express.static('public'));
 const WIDTH = 1200, HEIGHT = 600;
 const PLAYER_RADIUS = 40, PUCK_RADIUS = 20;
 const FRICTION = 0.985, GOAL_HEIGHT = 150, WALL_PADDING = 25; 
-const MAX_PUCK_SPEED = 35; // Золота середина швидкості шайби
+const MAX_PUCK_SPEED = 35; 
 
 const usersDb = {}; 
 const rooms = {};
@@ -48,10 +48,10 @@ function applyPhysics(obj1, obj2, r1, r2, mass1, mass2, bounciness) {
         obj1.vx -= p * mass2 * bounciness * nx; obj1.vy -= p * mass2 * bounciness * ny;
         obj2.vx += p * mass1 * bounciness * nx; obj2.vy += p * mass1 * bounciness * ny;
 
-        // ПОТУЖНІШЕ ЗАКРУЧУВАННЯ ВІД УДАРІВ
+        // БЕШЕНЕ ЗАКРУЧУВАННЯ ВІД УДАРІВ (Було 0.15, тепер 0.4)
         let tangent = -nx * ky + ny * kx;
-        obj1.vr += tangent * 0.15 * (mass2 / totalMass); // Збільшено множник закручування
-        obj2.vr -= tangent * 0.15 * (mass1 / totalMass);
+        obj1.vr += tangent * 0.4 * (mass2 / totalMass); 
+        obj2.vr -= tangent * 0.4 * (mass1 / totalMass);
 
         return true;
     }
@@ -114,12 +114,8 @@ function startGameLoop(roomId) {
 
             if (isNaN(puck.x) || isNaN(puck.y) || Math.abs(puck.x) > 4000) { puck.x = WIDTH / 2; puck.y = HEIGHT / 2; puck.vx = 0; puck.vy = 0; }
 
-            // ОБМЕЖЕННЯ ШВИДКОСТІ ШАЙБИ
             let puckSpeed = Math.sqrt(puck.vx * puck.vx + puck.vy * puck.vy);
-            if (puckSpeed > MAX_PUCK_SPEED) {
-                puck.vx = (puck.vx / puckSpeed) * MAX_PUCK_SPEED;
-                puck.vy = (puck.vy / puckSpeed) * MAX_PUCK_SPEED;
-            }
+            if (puckSpeed > MAX_PUCK_SPEED) { puck.vx = (puck.vx / puckSpeed) * MAX_PUCK_SPEED; puck.vy = (puck.vy / puckSpeed) * MAX_PUCK_SPEED; }
 
             puck.x += puck.vx; puck.y += puck.vy;
             puck.rotation = (puck.rotation || 0) + (puck.vr || 0);
@@ -153,21 +149,20 @@ function startGameLoop(roomId) {
                     p.isDragging = true;
                 }
                 
-                // === ШВИДШИЙ РУХ ТА КРАЩЕ ЗАКРУЧУВАННЯ ===
                 if (p.isDragging && p.tx !== undefined && p.ty !== undefined) {
-                    p.vx = (p.tx - p.x) * 0.4; // Було 0.25 - тепер гравець набагато швидший і різкіший!
+                    p.vx = (p.tx - p.x) * 0.4; 
                     p.vy = (p.ty - p.y) * 0.4;
-                    p.vr *= 0.95; // Менше гасимо обертання, щоб кіт міг крутитися в руках
+                    p.vr *= 0.95; 
                     
                     let speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-                    if (speed > 60) { p.vx = (p.vx/speed)*60; p.vy = (p.vy/speed)*60; } // Макс швидкість тепер 60
+                    if (speed > 60) { p.vx = (p.vx/speed)*60; p.vy = (p.vy/speed)*60; }
                 } else {
                     p.vx *= 0.94; p.vy *= 0.94; p.vr *= 0.97; 
                     
-                    // Крутимо кота, якщо він швидко ковзає після того як ти його відпустив
                     let speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
                     if (speed > 3) {
-                        p.vr += (p.vx > 0 ? 1 : -1) * speed * 0.005;
+                        // Більше закручування, коли відпускаєш на швидкості
+                        p.vr += (p.vx > 0 ? 1 : -1) * speed * 0.025;
                     }
                 }
 
