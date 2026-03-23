@@ -96,3 +96,67 @@ button:hover { background-color: #f0f0f0; transform: translateY(-2px); }
 }
 
 #status, #auth-status { font-size: 16px; color: #555; margin-top: 15px; }
+
+body, html {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background-color: #111;
+    font-family: 'Arial', sans-serif;
+    /* Забороняємо виділення тексту на телефонах */
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#auth, #menu {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.95);
+    padding: 40px; border-radius: 20px;
+    text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    z-index: 10;
+    box-sizing: border-box;
+}
+
+input {
+    padding: 10px; font-size: 16px; border-radius: 5px;
+    border: 1px solid #ccc; width: 80%;
+    box-sizing: border-box;
+}
+
+button {
+    padding: 12px 24px; margin: 5px; font-size: 16px;
+    font-weight: bold; cursor: pointer; border: 2px solid #ddd;
+    border-radius: 10px; background-color: #fff; transition: 0.3s;
+    /* Щоб на iPhone не було стандартного сірого стилю */
+    -webkit-appearance: none; 
+}
+
+button:hover { background-color: #f0f0f0; transform: translateY(-2px); }
+#btn-korzhik { border-color: #4da6ff; color: #0066cc; }
+#btn-karamelka { border-color: #ff99cc; color: #cc0066; }
+
+#gameCanvas {
+    display: none; width: 100vw; height: 100vh; object-fit: cover; 
+    /* Прибираємо стандартні дії браузера при свайпах */
+    touch-action: none; 
+}
+
+#status, #auth-status { font-size: 16px; color: #555; margin-top: 15px; }
+
+/* Адаптація для екранів телефонів (ширина менше 600px) */
+@media (max-width: 600px) {
+    #auth, #menu {
+        width: 90%;
+        padding: 20px;
+    }
+    button {
+        width: 100%;
+        margin: 5px 0;
+        padding: 15px; /* Більші кнопки для пальців */
+    }
+    input {
+        width: 100%;
+    }
+    h1 {
+        font-size: 24px;
+    }
+}
