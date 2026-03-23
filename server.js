@@ -22,18 +22,15 @@ function initGameState() {
     return { players: {}, puck: { x: WIDTH/2, y: HEIGHT/2, vx: 0, vy: 0, vr: 0, lastHit: null }, score: { team1: 0, team2: 0 }, goalTriggered: false };
 }
 
-// === НОВА НЬЮТОНІВСЬКА ФІЗИКА (Імпульс + Обертання) ===
 function applyPhysics(obj1, obj2, r1, r2, mass1, mass2, bounciness) {
     if (!obj1 || !obj2 || isNaN(obj1.x) || isNaN(obj2.x)) return false;
     
-    let dx = obj2.x - obj1.x; 
-    let dy = obj2.y - obj1.y;
+    let dx = obj2.x - obj1.x; let dy = obj2.y - obj1.y;
     let dist = Math.sqrt(dx*dx + dy*dy);
     if (dist === 0) { dx = 0.1; dist = 0.1; }
     let minDist = r1 + r2;
 
     if (dist < minDist) {
-        // 1. Виштовхуємо об'єкти один з одного (щоб не застрягали)
         let overlap = minDist - dist;
         let nx = dx / dist, ny = dy / dist;
         let totalMass = mass1 + mass2;
@@ -41,18 +38,15 @@ function applyPhysics(obj1, obj2, r1, r2, mass1, mass2, bounciness) {
         obj1.x -= nx * overlap * (mass2 / totalMass); obj1.y -= ny * overlap * (mass2 / totalMass);
         obj2.x += nx * overlap * (mass1 / totalMass); obj2.y += ny * overlap * (mass1 / totalMass);
 
-        // 2. Розрахунок сили удару (Збереження імпульсу)
         obj1.vx = obj1.vx || 0; obj1.vy = obj1.vy || 0; obj1.vr = obj1.vr || 0;
         obj2.vx = obj2.vx || 0; obj2.vy = obj2.vy || 0; obj2.vr = obj2.vr || 0;
         
-        let kx = obj1.vx - obj2.vx; 
-        let ky = obj1.vy - obj2.vy;
+        let kx = obj1.vx - obj2.vx; let ky = obj1.vy - obj2.vy;
         let p = 2 * (nx * kx + ny * ky) / totalMass;
 
         obj1.vx -= p * mass2 * bounciness * nx; obj1.vy -= p * mass2 * bounciness * ny;
         obj2.vx += p * mass1 * bounciness * nx; obj2.vy += p * mass1 * bounciness * ny;
 
-        // 3. Додаємо реалістичне закручування (Torque) по дотичній
         let tangent = -nx * ky + ny * kx;
         obj1.vr += tangent * 0.05 * (mass2 / totalMass);
         obj2.vr -= tangent * 0.05 * (mass1 / totalMass);
@@ -71,7 +65,7 @@ function resetAfterGoal(roomId, scorerChar) {
             game.state.goalTriggered = false; let t1Count = 0, t2Count = 0;
             for (let id in game.state.players) {
                 let p = game.state.players[id];
-                p.vx = 0; p.vy = 0; p.vr = 0; p.isDragging = false; // Скидаємо швидкості
+                p.vx = 0; p.vy = 0; p.vr = 0; p.isDragging = false; 
                 if (p.team === 1) { p.x = 150 + (t1Count * 50); p.y = 300 + (t1Count * 50); t1Count++; } 
                 else { p.x = 1050 - (t2Count * 50); p.y = 300 + (t2Count * 50); t2Count++; }
             }
@@ -122,7 +116,6 @@ function startGameLoop(roomId) {
             puck.rotation = (puck.rotation || 0) + (puck.vr || 0);
             puck.vx *= FRICTION; puck.vy *= FRICTION; puck.vr *= 0.98;
 
-            // Відбивання шайби від стін (з додаванням обертання)
             if (puck.y - PUCK_RADIUS < WALL_PADDING) { puck.y = PUCK_RADIUS + WALL_PADDING; puck.vy *= -0.9; puck.vr += puck.vx * 0.05; hit = true; } 
             else if (puck.y + PUCK_RADIUS > HEIGHT - WALL_PADDING) { puck.y = HEIGHT - PUCK_RADIUS - WALL_PADDING; puck.vy *= -0.9; puck.vr -= puck.vx * 0.05; hit = true; }
 
@@ -145,20 +138,30 @@ function startGameLoop(roomId) {
 
                 p.vx = p.vx || 0; p.vy = p.vy || 0; p.vr = p.vr || 0;
 
-                // Бот логіка
+                // === РОЗУМНИЙ БОТ (Більше не автоголить!) ===
                 if (p.isBot && !state.goalTriggered) {
-                    let targetX = p.team === 1 ? 200 : WIDTH - 200, targetY = HEIGHT / 2;
-                    if ((p.team === 1 && puck.x < WIDTH / 2 + 100) || (p.team === 2 && puck.x > WIDTH / 2 - 100)) { targetX = puck.x; targetY = puck.y; }
-                    p.tx = targetX; p.ty = targetY; p.isDragging = true;
+                    if (p.team === 1) {
+                        p.tx = Math.max(80, puck.x - 40); // Завжди намагається бути зліва від шайби
+                        p.ty = puck.y;
+                    } else {
+                        p.tx = Math.min(WIDTH - 80, puck.x + 40); // Завжди намагається бути справа
+                        p.ty = puck.y;
+                    }
+                    p.isDragging = true;
                 }
                 
-                // РУХ ГРАВЦЯ
+                // === ФІКС "РОЗРИВУ" ГРАВЦЯ (Ідеальна пружина) ===
                 if (p.isDragging && p.tx !== undefined && p.ty !== undefined) {
-                    p.vx += (p.tx - p.x) * 0.15; // Пружина до мишки
-                    p.vy += (p.ty - p.y) * 0.15;
-                    p.vr *= 0.8; // Гасимо обертання, коли тримаємо
+                    // Замінив += на =. Тепер швидкість стабільна і не росте безкінечно!
+                    p.vx = (p.tx - p.x) * 0.25; 
+                    p.vy = (p.ty - p.y) * 0.25;
+                    p.vr *= 0.8; 
+                    
+                    // Запобіжник: якщо потягнути курсор дуже далеко, кіт не полетить як куля
+                    let speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+                    if (speed > 40) { p.vx = (p.vx/speed)*40; p.vy = (p.vy/speed)*40; }
                 } else {
-                    p.vx *= 0.94; p.vy *= 0.94; p.vr *= 0.96; // Ковзання та кружляння
+                    p.vx *= 0.94; p.vy *= 0.94; p.vr *= 0.96; 
                 }
 
                 p.x += p.vx; p.y += p.vy;
@@ -168,17 +171,14 @@ function startGameLoop(roomId) {
                 if(p.x < minX) { p.x = minX; p.vx *= -0.5; } if(p.x > maxX) { p.x = maxX; p.vx *= -0.5; }
                 if(p.y < WALL_PADDING + PLAYER_RADIUS) { p.y = WALL_PADDING + PLAYER_RADIUS; p.vy *= -0.5; } if(p.y > HEIGHT - WALL_PADDING - PLAYER_RADIUS) { p.y = HEIGHT - WALL_PADDING - PLAYER_RADIUS; p.vy *= -0.5; }
 
-                // Зіткнення: Гравець і Шайба (Гравець маса=4, Шайба маса=1, Bounciness=1.6)
                 if (applyPhysics(p, puck, PLAYER_RADIUS, PUCK_RADIUS, 4, 1, 1.6)) { hit = true; puck.lastHit = id; }
 
-                // Зіткнення: Гравець і Гравець (Маси однакові 4 і 4, Bounciness=0.8)
                 for (let j = i + 1; j < playerKeys.length; j++) {
                     let p2 = state.players[playerKeys[j]];
                     applyPhysics(p, p2, PLAYER_RADIUS, PLAYER_RADIUS, 4, 4, 0.8);
                 }
             }
 
-            // Передаємо лише найнеобхідніше для оптимізації
             const miniState = { p: {}, u: { x: Math.round(puck.x), y: Math.round(puck.y), r: puck.rotation }, s: state.score, t: remainingSeconds, h: hit ? 1 : 0 };
             for (let id in state.players) {
                 if (state.players[id] && !isNaN(state.players[id].x)) {
@@ -236,7 +236,6 @@ io.on('connection', (socket) => {
         socket.join(randomRoomId); socket.emit('spectateStart', { roomId: randomRoomId, state: rooms[randomRoomId].state });
     });
 
-    // ОПТИМІЗОВАНИЙ ВВІД КОРИСТУВАЧА
     socket.on('input', (data) => {
         try {
             if (!data || !data.roomId || !rooms[data.roomId]) return;
