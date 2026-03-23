@@ -380,3 +380,55 @@ button:active {
 @keyframes scan {
     100% { transform: translate(-100%, -100%) rotate(360deg); }
 }
+
+/* --- КНОПКА СХОВАТИ/ПОКАЗАТИ ЧАТ --- */
+#chat-toggle-btn {
+    position: absolute;
+    bottom: 240px; /* Знаходиться трохи вище самого чату */
+    left: 20px;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    cursor: pointer;
+    z-index: 101;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+    padding: 0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+#chat-toggle-btn:hover {
+    transform: scale(1.15);
+    background: rgba(77, 166, 255, 0.6);
+}
+
+/* Клас, коли чат схований (опускаємо кнопку в кут) */
+#chat-toggle-btn.chat-hidden {
+    bottom: 20px;
+    opacity: 0.5;
+}
+
+#chat-toggle-btn.chat-hidden:hover {
+    opacity: 1;
+}
+
+/* Адаптація кнопки для мобільних телефонів */
+@media (max-width: 600px) {
+    #chat-toggle-btn {
+        bottom: 180px;
+        left: 10px;
+        width: 35px;
+        height: 35px;
+        font-size: 16px;
+    }
+    #chat-toggle-btn.chat-hidden {
+        bottom: 10px;
+    }
+}
