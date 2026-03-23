@@ -22,6 +22,7 @@
 
     <div id="menu" style="display:none;">
         <h1 id="welcome-text">Добро пожаловать!</h1>
+        <h2 id="my-elo-display" style="color: #ff9900; margin-top: -10px;">🏆 Рейтинг Эло: 1000</h2>
         
         <div class="selection">
             <h3>1. Выбери персонажа:</h3>
@@ -42,10 +43,10 @@
         </div>
     </div>
 
-   <div id="matchmaking-overlay" style="display: none;">
+    <div id="matchmaking-overlay" style="display: none;">
         <div class="radar"></div>
         <h2 id="mm-text">Поиск достойного соперника...</h2>
-        <button onclick="cancelMatchmaking()" style="margin-top: 30px; border-color: #ff4d4d; color: #ff4d4d;">Отмена</button>
+        <button onclick="cancelMatchmaking()" style="margin-top: 30px; border-color: #ff4d4d; color: #ff4d4d; background: transparent;">Отмена</button>
     </div>
 
     <button id="chat-toggle-btn" onclick="toggleChat()" style="display: none;" title="Скрыть/Показать чат">👁️</button>
@@ -56,6 +57,12 @@
             <input type="text" id="chat-input" placeholder="Написать в чат...">
             <button id="chat-btn" onclick="sendChat()">➤</button>
         </div>
+    </div>
+
+    <div id="afk-screen" style="display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 3000; flex-direction: column; align-items: center; justify-content: center;">
+        <h1 style="color: #ff4d4d; font-size: 40px; text-align: center;">ВЫ УСНУЛИ? 😴</h1>
+        <p style="color: white; font-size: 20px; text-align: center; margin-bottom: 30px;">Вы были неактивны 15 секунд. Теперь за вас играет БОТ.</p>
+        <button onclick="location.reload()" style="padding: 15px 30px; font-size: 20px; background: #ff4d4d; color: white; border: none; cursor: pointer; border-radius: 10px;">Выйти в меню</button>
     </div>
 
     <canvas id="gameCanvas" width="1200" height="600"></canvas>
