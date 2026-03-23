@@ -13,30 +13,26 @@ const eloDisplay = document.getElementById('my-elo-display');
 const afkScreen = document.getElementById('afk-screen');
 
 let myUsername = '';
-let myElo = 100;
+let myElo = 1000;
 let myCharacter = 'korzhik';
 let mySelectedMode = 1;
 let currentRoom = null;
 let myTeam = null; 
 let isSpectator = false; 
 
-const PLAYER_RADIUS = 40;
-const PUCK_RADIUS = 20;
-const WALL_PADDING = 25; // Відступ для локального передбачення
+const PLAYER_RADIUS = 40, PUCK_RADIUS = 20, WALL_PADDING = 25;
 
-// Завантаження графіки
 const images = { rink: new Image(), korzhik: new Image(), karamelka: new Image(), puck: new Image(), korGol: new Image(), carGol: new Image() };
 images.rink.src = 'assets/rink.jpg'; images.korzhik.src = 'assets/korzhik.png'; images.karamelka.src = 'assets/karamelka.png'; 
 images.puck.src = 'assets/puck.png'; images.korGol.src = 'assets/kor_gol.png'; images.carGol.src = 'assets/car_gol.png';
 
-// Завантаження звуків ударів
-const hitSounds = [
-    new Audio('assets/shay1.mp3'),
-    new Audio('assets/shay2.mp3')
-];
+const hitSounds = [new Audio('assets/shay1.mp3'), new Audio('assets/shay2.mp3')];
 
 let gameState = { players: {}, puck: { x: 600, y: 300 }, score: { team1: 0, team2: 0 }, timeLeft: 180 };
 let isDragging = false, showGoalAnimation = false, goalScorerChar = null, goalAnimationStart = 0;
+
+// МАСИВ ДЛЯ АНІМАЦІЙ ТЕКСТУ
+let floatingTexts = [];
 
 socket.on('onlineCount', (count) => { document.getElementById('online-counter').innerText = `Онлайн: ${count}`; });
 socket.on('pingTimer', (timestamp) => { socket.emit('pongTimer', timestamp); });
@@ -95,7 +91,6 @@ socket.on('afkWarning', () => { isSpectator = true; if(afkScreen) afkScreen.styl
 socket.on('gs', (miniState) => {
     if (!currentRoom) return;
     
-    // Записуємо цільові координати (target) для плавного переміщення (LERP)
     gameState.puck.targetX = miniState.u.x; 
     gameState.puck.targetY = miniState.u.y; 
     gameState.score = miniState.s; 
@@ -110,18 +105,34 @@ socket.on('gs', (miniState) => {
         }
     }
 
-    // Якщо сервер повідомив про удар (h === 1), граємо звук!
     if (miniState.h === 1) {
         let snd = hitSounds[Math.floor(Math.random() * hitSounds.length)];
-        snd.currentTime = 0; // Скидаємо звук на початок, щоб можна було швидко повторювати
-        snd.play().catch(e => {}); // catch потрібен, щоб браузер не сварився
+        snd.currentTime = 0; snd.play().catch(e => {}); 
     }
 });
 
 let eloChangeMsg = ""; 
+
+// === СЛУХАЄМО МИТТЄВЕ ЕЛО ===
 socket.on('eloUpdated', (data) => {
-    myElo = data.elo; eloChangeMsg = `\nЭло: ${data.change > 0 ? '+' : ''}${data.change} (Всего: ${myElo})`;
+    myElo = data.elo;
     if (eloDisplay) eloDisplay.innerText = `🏆 Рейтинг Эло: ${myElo}`;
+    
+    // Якщо нам дали Ело під час гри, показуємо анімацію над котом!
+    if (data.change > 0 && gameState.players[socket.id] && canvas.style.display === 'block') {
+        let p = gameState.players[socket.id];
+        floatingTexts.push({
+            x: p.x,
+            y: p.y - 60,
+            text: `+${data.change} ЭЛО!`,
+            life: 90 // Буде жити 90 кадрів (3 секунди)
+        });
+    }
+    
+    // Для повідомлення в кінці
+    if (data.change !== 25 && data.change !== 10) {
+        eloChangeMsg = `\nЭло за матч: ${data.change > 0 ? '+' : ''}${data.change} (Всего: ${myElo})`;
+    }
 });
 
 socket.on('gameOver', (finalScore) => {
@@ -179,7 +190,6 @@ function handleMove(e) {
     const pos = getEventPos(e);
     const myPlayer = gameState.players[socket.id];
 
-    // КЛІЄНТСЬКЕ ПЕРЕДБАЧЕННЯ: Локально оновлюємо координати МИТТЄВО (0мс затримки)
     let minX = myTeam === 1 ? WALL_PADDING + PLAYER_RADIUS : canvas.width / 2 + PLAYER_RADIUS;
     let maxX = myTeam === 1 ? canvas.width / 2 - PLAYER_RADIUS : canvas.width - WALL_PADDING - PLAYER_RADIUS;
     let minY = WALL_PADDING + PLAYER_RADIUS, maxY = canvas.height - WALL_PADDING - PLAYER_RADIUS;
@@ -187,9 +197,7 @@ function handleMove(e) {
     myPlayer.x = Math.max(minX, Math.min(pos.x, maxX)); 
     myPlayer.y = Math.max(minY, Math.min(pos.y, maxY));
     
-    // Щоб інтерполяція не тягнула нас назад, робимо targetX рівним поточному
-    myPlayer.targetX = myPlayer.x;
-    myPlayer.targetY = myPlayer.y;
+    myPlayer.targetX = myPlayer.x; myPlayer.targetY = myPlayer.y;
 
     socket.emit('move', { roomId: currentRoom, position: {x: myPlayer.x, y: myPlayer.y} });
 }
@@ -207,7 +215,6 @@ function gameLoop(timestamp) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (images.rink.complete) ctx.drawImage(images.rink, 0, 0, canvas.width, canvas.height);
     
-    // ПЛАВНИЙ РУХ ШАЙБИ (LERP)
     if (gameState.puck.targetX !== undefined) {
         gameState.puck.x += (gameState.puck.targetX - gameState.puck.x) * 0.3;
         gameState.puck.y += (gameState.puck.targetY - gameState.puck.y) * 0.3;
@@ -217,14 +224,10 @@ function gameLoop(timestamp) {
     for (let id in gameState.players) {
         let p = gameState.players[id];
         
-        // ПЛАВНИЙ РУХ ГРАВЦІВ (LERP)
-        // Якщо це ми, і ми зараз тягнемо фігурку - рух вже відбувається в handleMove миттєво
         if (id === socket.id && isDragging && !isSpectator) {
-            // Нічого не робимо, залишаємо x та y як є
+            // Миттєвий рух (0 пінг на екрані)
         } else if (p.targetX !== undefined) {
-            // Усі інші (або ми, якщо відпустили кнопку миші) плавно наздоганяють серверні координати
-            p.x += (p.targetX - p.x) * 0.3;
-            p.y += (p.targetY - p.y) * 0.3;
+            p.x += (p.targetX - p.x) * 0.3; p.y += (p.targetY - p.y) * 0.3;
         }
 
         let img = p.char === 'korzhik' ? images.korzhik : images.karamelka;
@@ -254,5 +257,29 @@ function gameLoop(timestamp) {
         const goalImg = goalScorerChar === 'korzhik' ? images.korGol : images.carGol;
         if (goalImg.complete) { ctx.globalAlpha = opacity / 0.6; ctx.drawImage(goalImg, canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300); ctx.globalAlpha = 1.0; }
     }
+
+    // === МАЛЮЄМО СВІТЯЩИЙСЯ ТЕКСТ ЕЛО ===
+    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+        let ft = floatingTexts[i];
+        ctx.fillStyle = `rgba(255, 215, 0, ${ft.life / 90})`; // Золотий колір, який зникає
+        ctx.font = 'bold 22px Arial';
+        ctx.textAlign = 'center';
+        
+        // Тінь для тексту, щоб його було круто видно
+        ctx.shadowColor = "black";
+        ctx.shadowBlur = 4;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        
+        ctx.fillText(ft.text, ft.x, ft.y);
+        
+        // Скидаємо тіні
+        ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
+
+        ft.y -= 1; // Текст летить вгору
+        ft.life--;
+        if (ft.life <= 0) floatingTexts.splice(i, 1);
+    }
+
     requestAnimationFrame(gameLoop);
 }
