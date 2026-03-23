@@ -30,9 +30,11 @@ const hitSounds = [new Audio('assets/shay1.mp3'), new Audio('assets/shay2.mp3')]
 
 let gameState = { players: {}, puck: { x: 600, y: 300 }, score: { team1: 0, team2: 0 }, timeLeft: 180 };
 let isDragging = false, showGoalAnimation = false, goalScorerChar = null, goalAnimationStart = 0;
-
-// МАСИВ ДЛЯ АНІМАЦІЙ ТЕКСТУ
 let floatingTexts = [];
+
+// ЗМІННІ ДЛЯ ФІЗИКИ МИШКІ/ТАЧА
+let targetMouseX = 0;
+let targetMouseY = 0;
 
 socket.on('onlineCount', (count) => { document.getElementById('online-counter').innerText = `Онлайн: ${count}`; });
 socket.on('pingTimer', (timestamp) => { socket.emit('pongTimer', timestamp); });
@@ -90,11 +92,7 @@ socket.on('afkWarning', () => { isSpectator = true; if(afkScreen) afkScreen.styl
 
 socket.on('gs', (miniState) => {
     if (!currentRoom) return;
-    
-    gameState.puck.targetX = miniState.u.x; 
-    gameState.puck.targetY = miniState.u.y; 
-    gameState.score = miniState.s; 
-    gameState.timeLeft = miniState.t; 
+    gameState.puck.targetX = miniState.u.x; gameState.puck.targetY = miniState.u.y; gameState.score = miniState.s; gameState.timeLeft = miniState.t; 
     
     for (let id in miniState.p) {
         if (gameState.players[id]) {
@@ -112,27 +110,14 @@ socket.on('gs', (miniState) => {
 });
 
 let eloChangeMsg = ""; 
-
-// === СЛУХАЄМО МИТТЄВЕ ЕЛО ===
 socket.on('eloUpdated', (data) => {
     myElo = data.elo;
     if (eloDisplay) eloDisplay.innerText = `🏆 Рейтинг Эло: ${myElo}`;
-    
-    // Якщо нам дали Ело під час гри, показуємо анімацію над котом!
     if (data.change > 0 && gameState.players[socket.id] && canvas.style.display === 'block') {
         let p = gameState.players[socket.id];
-        floatingTexts.push({
-            x: p.x,
-            y: p.y - 60,
-            text: `+${data.change} ЭЛО!`,
-            life: 90 // Буде жити 90 кадрів (3 секунди)
-        });
+        floatingTexts.push({ x: p.x, y: p.y - 60, text: `+${data.change} ЭЛО!`, life: 90 });
     }
-    
-    // Для повідомлення в кінці
-    if (data.change !== 25 && data.change !== 10) {
-        eloChangeMsg = `\nЭло за матч: ${data.change > 0 ? '+' : ''}${data.change} (Всего: ${myElo})`;
-    }
+    if (data.change !== 25 && data.change !== 10) eloChangeMsg = `\nЭло за матч: ${data.change > 0 ? '+' : ''}${data.change} (Всего: ${myElo})`;
 });
 
 socket.on('gameOver', (finalScore) => {
@@ -176,38 +161,51 @@ function getEventPos(e) {
     if (e.touches && e.touches.length > 0) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; }
     return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
 }
+
 function handleStart(e) {
     if (isSpectator) return; if (e.target.closest('#chat-container') || e.target.closest('#chat-toggle-btn')) return; 
     if (!currentRoom || !myTeam || !gameState.players[socket.id]) return;
     const pos = getEventPos(e), myPlayer = gameState.players[socket.id], dx = pos.x - myPlayer.x, dy = pos.y - myPlayer.y;
-    if (Math.sqrt(dx * dx + dy * dy) <= PLAYER_RADIUS * 1.5) isDragging = true;
+    
+    if (Math.sqrt(dx * dx + dy * dy) <= PLAYER_RADIUS * 1.5) {
+        isDragging = true;
+        targetMouseX = pos.x;
+        targetMouseY = pos.y;
+    }
 }
-function handleEnd() { isDragging = false; }
+
+function handleEnd() { 
+    isDragging = false; 
+}
+
 function handleMove(e) {
-    if (isSpectator) return; if (e.target.closest('#chat-container') || e.target.closest('#chat-toggle-btn')) return; 
-    if (e.cancelable) e.preventDefault(); if (!isDragging || !currentRoom) return;
+    if (isSpectator || !isDragging || !currentRoom) return; 
+    if (e.target.closest('#chat-container') || e.target.closest('#chat-toggle-btn')) return; 
+    if (e.cancelable) e.preventDefault(); 
     
     const pos = getEventPos(e);
-    const myPlayer = gameState.players[socket.id];
-
-    let minX = myTeam === 1 ? WALL_PADDING + PLAYER_RADIUS : canvas.width / 2 + PLAYER_RADIUS;
-    let maxX = myTeam === 1 ? canvas.width / 2 - PLAYER_RADIUS : canvas.width - WALL_PADDING - PLAYER_RADIUS;
-    let minY = WALL_PADDING + PLAYER_RADIUS, maxY = canvas.height - WALL_PADDING - PLAYER_RADIUS;
-    
-    myPlayer.x = Math.max(minX, Math.min(pos.x, maxX)); 
-    myPlayer.y = Math.max(minY, Math.min(pos.y, maxY));
-    
-    myPlayer.targetX = myPlayer.x; myPlayer.targetY = myPlayer.y;
-
-    socket.emit('move', { roomId: currentRoom, position: {x: myPlayer.x, y: myPlayer.y} });
+    targetMouseX = pos.x;
+    targetMouseY = pos.y;
 }
 
 canvas.addEventListener('mousedown', handleStart); window.addEventListener('mouseup', handleEnd); canvas.addEventListener('mousemove', handleMove);
 canvas.addEventListener('touchstart', handleStart, { passive: false }); window.addEventListener('touchend', handleEnd); canvas.addEventListener('touchmove', handleMove, { passive: false });
 
-function safeDrawCircleImage(image, x, y, radius) {
+// === ОНОВЛЕНА ФУНКЦІЯ МАЛЮВАННЯ З ПІДТРИМКОЮ ОБЕРТАННЯ ===
+function safeDrawCircleImage(image, x, y, radius, rotation = 0) {
     if (!image.complete || image.naturalWidth === 0) { ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = 'gray'; ctx.fill(); return; }
-    ctx.save(); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2, true); ctx.closePath(); ctx.clip(); ctx.drawImage(image, x - radius, y - radius, radius * 2, radius * 2); ctx.restore();
+    
+    ctx.save(); 
+    ctx.translate(x, y); // Переносимо центр координат в центр гравця/шайби
+    ctx.rotate(rotation); // Крутимо полотно
+    
+    ctx.beginPath(); 
+    ctx.arc(0, 0, radius, 0, Math.PI * 2, true); 
+    ctx.closePath(); 
+    ctx.clip(); 
+    ctx.drawImage(image, -radius, -radius, radius * 2, radius * 2); 
+    
+    ctx.restore(); // Повертаємо полотно в норму
 }
 
 function gameLoop(timestamp) {
@@ -224,19 +222,73 @@ function gameLoop(timestamp) {
     for (let id in gameState.players) {
         let p = gameState.players[id];
         
-        if (id === socket.id && isDragging && !isSpectator) {
-            // Миттєвий рух (0 пінг на екрані)
+        // Ініціалізуємо змінні фізики, якщо їх ще немає
+        if (p.vx === undefined) { p.vx = 0; p.vy = 0; p.rotation = 0; p.vr = 0; }
+
+        if (id === socket.id && !isSpectator) {
+            // === ФІЗИКА ЛОКАЛЬНОГО ГРАВЦЯ ===
+            if (isDragging) {
+                // Пружинимо до мишки
+                p.vx = (targetMouseX - p.x) * 0.25;
+                p.vy = (targetMouseY - p.y) * 0.25;
+                p.vr *= 0.8; // Перестаємо крутитися, коли нас тримають
+            } else {
+                // Ковзаємо по інерції
+                p.vx *= 0.95; 
+                p.vy *= 0.95;
+                
+                // Додаємо кружляння, якщо швидко ковзаємо
+                let speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+                if (speed > 2) {
+                    p.vr = (p.vx > 0 ? 1 : -1) * speed * 0.02; // Крутимось в бік польоту
+                } else {
+                    p.vr *= 0.9; // Зупиняємо обертання
+                }
+            }
+
+            // Застосовуємо швидкість до координат
+            p.x += p.vx;
+            p.y += p.vy;
+
+            // Не вилітаємо за межі (локально)
+            let minX = myTeam === 1 ? WALL_PADDING + PLAYER_RADIUS : canvas.width / 2 + PLAYER_RADIUS;
+            let maxX = myTeam === 1 ? canvas.width / 2 - PLAYER_RADIUS : canvas.width - WALL_PADDING - PLAYER_RADIUS;
+            let minY = WALL_PADDING + PLAYER_RADIUS, maxY = canvas.height - WALL_PADDING - PLAYER_RADIUS;
+            
+            p.x = Math.max(minX, Math.min(p.x, maxX)); 
+            p.y = Math.max(minY, Math.min(p.y, maxY));
+            
+            // Відправляємо рух на сервер, якщо рухаємось
+            if (Math.abs(p.vx) > 0.1 || Math.abs(p.vy) > 0.1) {
+                socket.emit('move', { roomId: currentRoom, position: {x: p.x, y: p.y} });
+            }
+
         } else if (p.targetX !== undefined) {
-            p.x += (p.targetX - p.x) * 0.3; p.y += (p.targetY - p.y) * 0.3;
+            // === ФІЗИКА ІНШИХ ГРАВЦІВ (Анімація їх руху) ===
+            let dx = (p.targetX - p.x) * 0.3;
+            let dy = (p.targetY - p.y) * 0.3;
+            p.x += dx; 
+            p.y += dy;
+            
+            // Якщо інший гравець швидко летить - крутимо і його!
+            let speed = Math.sqrt(dx * dx + dy * dy);
+            if (speed > 1) { p.vr = (dx > 0 ? 1 : -1) * speed * 0.03; } 
+            else { p.vr *= 0.9; }
         }
 
+        // Застосовуємо кут обертання
+        p.rotation += p.vr;
+
         let img = p.char === 'korzhik' ? images.korzhik : images.karamelka;
-        safeDrawCircleImage(img, p.x, p.y, PLAYER_RADIUS);
+        
+        // Малюємо з обертанням!
+        safeDrawCircleImage(img, p.x, p.y, PLAYER_RADIUS, p.rotation);
         
         ctx.fillStyle = (id === socket.id && !isSpectator) ? '#ffd700' : 'white'; 
         ctx.font = '14px Arial'; ctx.textAlign = 'center'; 
         
         let displayName = p.isBot ? `[BOT] ${p.username}` : p.username;
+        // Текст малюємо без обертання, щоб він не крутився догори дригом
         ctx.fillText(displayName, p.x, p.y - PLAYER_RADIUS - 15);
         
         let pingVal = p.ping || 0;
@@ -258,26 +310,13 @@ function gameLoop(timestamp) {
         if (goalImg.complete) { ctx.globalAlpha = opacity / 0.6; ctx.drawImage(goalImg, canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300); ctx.globalAlpha = 1.0; }
     }
 
-    // === МАЛЮЄМО СВІТЯЩИЙСЯ ТЕКСТ ЕЛО ===
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
         let ft = floatingTexts[i];
-        ctx.fillStyle = `rgba(255, 215, 0, ${ft.life / 90})`; // Золотий колір, який зникає
-        ctx.font = 'bold 22px Arial';
-        ctx.textAlign = 'center';
-        
-        // Тінь для тексту, щоб його було круто видно
-        ctx.shadowColor = "black";
-        ctx.shadowBlur = 4;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        
+        ctx.fillStyle = `rgba(255, 215, 0, ${ft.life / 90})`; ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center';
+        ctx.shadowColor = "black"; ctx.shadowBlur = 4; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
         ctx.fillText(ft.text, ft.x, ft.y);
-        
-        // Скидаємо тіні
         ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
-
-        ft.y -= 1; // Текст летить вгору
-        ft.life--;
+        ft.y -= 1; ft.life--;
         if (ft.life <= 0) floatingTexts.splice(i, 1);
     }
 
