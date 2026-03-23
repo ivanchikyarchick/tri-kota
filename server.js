@@ -4,7 +4,11 @@ const { Server } = require('socket.io');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+// Налаштування Socket.io для кращої роботи з Render.com
+const io = new Server(server, {
+    pingTimeout: 60000,
+    pingInterval: 25000
+});
 
 app.use(express.static('public'));
 
@@ -14,18 +18,15 @@ const PLAYER_RADIUS = 40;
 const PUCK_RADIUS = 20;
 const FRICTION = 0.985; 
 const GOAL_HEIGHT = 150; 
-const WALL_PADDING = 25; // Відступ стін на зображенні
+const WALL_PADDING = 25; 
 
-// База користувачів у пам'яті
-const usersDb = {}; // { username: password }
+const usersDb = {}; 
 const rooms = {};
-
-// Черги для різних режимів (1 = 1v1, 2 = 2v2, 3 = 3v3)
 const queues = { 1: [], 2: [], 3: [] };
 
 function initGameState() {
     return {
-        players: {}, // { socketId: { x, y, char, team, username } }
+        players: {}, 
         puck: { x: WIDTH/2, y: HEIGHT/2, vx: 0, vy: 0 },
         score: { team1: 0, team2: 0 },
         goalTriggered: false
@@ -47,18 +48,17 @@ function handleCollision(p1, p2, radius1, radius2, isPuck = false) {
             p2.x = p1.x + Math.cos(angle) * minDist;
             p2.y = p1.y + Math.sin(angle) * minDist;
         } else {
-            // Зіткнення гравців між собою (щоб не проїжджали крізь один одного)
             let overlap = minDist - distance;
-            p1.x -= Math.cos(angle) * (overlap / 2);
-            p1.y -= Math.sin(angle) * (overlap / 2);
-            p2.x += Math.cos(angle) * (overlap / 2);
-            p2.y += Math.sin(angle) * (overlap / 2);
+            p1.x -= Math.cos(angle) * (overlap / 2); p1.y -= Math.sin(angle) * (overlap / 2);
+            p2.x += Math.cos(angle) * (overlap / 2); p2.y += Math.sin(angle) * (overlap / 2);
         }
     }
 }
 
 function resetAfterGoal(roomId, scorerChar) {
     const game = rooms[roomId];
+    if (!game) return;
+
     io.to(roomId).emit('goal', scorerChar);
     
     setTimeout(() => {
@@ -66,7 +66,6 @@ function resetAfterGoal(roomId, scorerChar) {
             game.state.puck = { x: WIDTH/2, y: HEIGHT/2, vx: 0, vy: 0 };
             game.state.goalTriggered = false;
             
-            // Розставляємо гравців по своїх зонах
             let t1Count = 0, t2Count = 0;
             for (let id in game.state.players) {
                 let p = game.state.players[id];
@@ -86,22 +85,22 @@ function startGameLoop(roomId) {
     const game = rooms[roomId];
     if (game.loopInterval) return;
 
+    // ЗНИЖЕНО ДО 30 ТІКІВ (приблизно 33 мс), Render скаже спасибі
     game.loopInterval = setInterval(() => {
+        if (!rooms[roomId]) return; // Захист
         const state = game.state;
         const puck = state.puck;
 
-        // Фізика шайби
         puck.x += puck.vx; puck.y += puck.vy;
         puck.vx *= FRICTION; puck.vy *= FRICTION;
 
-        // Межі для шайби (З врахуванням WALL_PADDING)
         if (puck.y - PUCK_RADIUS < WALL_PADDING) { puck.y = PUCK_RADIUS + WALL_PADDING; puck.vy *= -0.8; } 
         else if (puck.y + PUCK_RADIUS > HEIGHT - WALL_PADDING) { puck.y = HEIGHT - PUCK_RADIUS - WALL_PADDING; puck.vy *= -0.8; }
 
         if (puck.y > HEIGHT / 2 - GOAL_HEIGHT / 2 && puck.y < HEIGHT / 2 + GOAL_HEIGHT / 2) {
             if (puck.x - PUCK_RADIUS < WALL_PADDING && !state.goalTriggered) {
                 state.score.team2++; state.goalTriggered = true; 
-                resetAfterGoal(roomId, 'karamelka'); return; // Умовно показуємо Карамельку для Team2
+                resetAfterGoal(roomId, 'karamelka'); return; 
             } else if (puck.x + PUCK_RADIUS > WIDTH - WALL_PADDING && !state.goalTriggered) {
                 state.score.team1++; state.goalTriggered = true; 
                 resetAfterGoal(roomId, 'korzhik'); return;
@@ -111,18 +110,30 @@ function startGameLoop(roomId) {
             else if (puck.x + PUCK_RADIUS > WIDTH - WALL_PADDING) { puck.x = WIDTH - PUCK_RADIUS - WALL_PADDING; puck.vx *= -0.8; }
         }
 
-        // Зіткнення шайби з гравцями
         for (let id in state.players) {
             handleCollision(state.players[id], puck, PLAYER_RADIUS, PUCK_RADIUS, true);
         }
 
-        io.to(roomId).emit('gameState', state);
-    }, 1000 / 60);
+        // ОПТИМІЗАЦІЯ ТРАФІКУ: Надсилаємо тільки координати і рахунок
+        const miniState = {
+            p: {}, // Гравці
+            u: { x: Math.round(puck.x), y: Math.round(puck.y) }, // Шайба
+            s: state.score // Рахунок
+        };
+        
+        for (let id in state.players) {
+            miniState.p[id] = {
+                x: Math.round(state.players[id].x),
+                y: Math.round(state.players[id].y)
+            };
+        }
+
+        io.to(roomId).emit('gs', miniState); // 'gs' замість 'gameState' для економії байтів
+
+    }, 1000 / 30); 
 }
 
 io.on('connection', (socket) => {
-    
-    // АВТОРИЗАЦІЯ
     socket.on('register', ({ username, password }) => {
         if (usersDb[username]) return socket.emit('authResult', { success: false, msg: 'Имя уже занято!' });
         usersDb[username] = password;
@@ -137,17 +148,13 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ПОШУК ГРИ
     socket.on('findMatch', (data) => {
-        const mode = data.mode; // 1, 2 або 3
+        const mode = data.mode; 
         const queue = queues[mode];
         
-        // Перевірка, чи гравець вже не в черзі
-        if (!queue.find(p => p.socket.id === socket.id)) {
-            queue.push({ socket, data });
-        }
+        if (!queue.find(p => p.socket.id === socket.id)) queue.push({ socket, data });
 
-        const requiredPlayers = mode * 2; // 2 для 1v1, 4 для 2v2, 6 для 3v3
+        const requiredPlayers = mode * 2; 
 
         if (queue.length >= requiredPlayers) {
             const playersInMatch = queue.splice(0, requiredPlayers);
@@ -156,34 +163,29 @@ io.on('connection', (socket) => {
 
             playersInMatch.forEach((p, index) => {
                 p.socket.join(roomId);
-                const team = (index < mode) ? 1 : 2; // Перша половина в команду 1, друга в команду 2
+                const team = (index < mode) ? 1 : 2; 
                 
                 gameState.players[p.socket.id] = {
-                    x: team === 1 ? 150 : 1050,
-                    y: 300 + (index * 20),
-                    char: p.data.character,
-                    team: team,
-                    username: p.data.username
+                    x: team === 1 ? 150 : 1050, y: 300 + (index * 20),
+                    char: p.data.character, team: team, username: p.data.username
                 };
-                
-                io.to(p.socket.id).emit('matchFound', { roomId, myTeam: team, mode: mode });
             });
 
             rooms[roomId] = { state: gameState, players: playersInMatch.map(p => p.socket.id) };
+            
+            // Надсилаємо ПОВНИЙ стан один раз при старті
+            io.to(roomId).emit('matchFound', { roomId, state: gameState });
             startGameLoop(roomId);
         } else {
             socket.emit('waiting', `Ожидание игроков (${queue.length}/${requiredPlayers})...`);
         }
     });
 
-    // РУХ І ОБМЕЖЕННЯ
     socket.on('move', (data) => {
         if (!data.roomId || !rooms[data.roomId]) return;
-        const state = rooms[data.roomId].state;
-        const player = state.players[socket.id];
+        const player = rooms[data.roomId].state.players[socket.id];
         
         if (player) {
-            // Межі карти для гравців
             let minX = player.team === 1 ? WALL_PADDING + PLAYER_RADIUS : WIDTH / 2 + PLAYER_RADIUS;
             let maxX = player.team === 1 ? WIDTH / 2 - PLAYER_RADIUS : WIDTH - WALL_PADDING - PLAYER_RADIUS;
             let minY = WALL_PADDING + PLAYER_RADIUS;
@@ -194,10 +196,25 @@ io.on('connection', (socket) => {
         }
     });
 
+    // ФІКС ВИТОКУ ПАМ'ЯТІ
     socket.on('disconnect', () => {
+        // Чистимо черги
         [1, 2, 3].forEach(mode => {
             queues[mode] = queues[mode].filter(p => p.socket.id !== socket.id);
         });
+
+        // Шукаємо кімнату, де був гравець
+        for (const roomId in rooms) {
+            if (rooms[roomId].players.includes(socket.id)) {
+                // Зупиняємо цикл
+                clearInterval(rooms[roomId].state.loopInterval);
+                // Сповіщаємо інших
+                io.to(roomId).emit('playerDisconnected');
+                // Видаляємо кімнату з пам'яті
+                delete rooms[roomId];
+                break;
+            }
+        }
     });
 });
 
