@@ -32,6 +32,21 @@ const hitSounds = [new Audio('assets/shay1.mp3'), new Audio('assets/shay2.mp3')]
 let gameState = { players: {}, puck: { x: 600, y: 300, rotation: 0 }, score: { team1: 0, team2: 0 }, timeLeft: 180 };
 let isDragging = false, showGoalAnimation = false, goalScorerChar = null, goalAnimationStart = 0, floatingTexts = [];
 
+// === ЗАХИСТ ВІД СКРОЛУ (МОБІЛЬНІ) ===
+document.addEventListener('touchmove', function(e) {
+    if (e.target.tagName !== 'INPUT') { // Дозволяємо скролити чат, якщо треба
+        e.preventDefault();
+    }
+}, { passive: false });
+
+// === ПОВНОЕКРАННИЙ РЕЖИМ ===
+function enableFullscreen() {
+    let elem = document.documentElement;
+    if (elem.requestFullscreen) { elem.requestFullscreen(); }
+    else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen(); } // Safari
+    else if (elem.msRequestFullscreen) { elem.msRequestFullscreen(); } // IE11
+}
+
 socket.on('onlineCount', (count) => { document.getElementById('online-counter').innerText = `Онлайн: ${count}`; });
 socket.on('pingTimer', (timestamp) => { socket.emit('pongTimer', timestamp); });
 
@@ -50,9 +65,19 @@ socket.on('authResult', (res) => {
 
 function selectCharacter(char) { myCharacter = char; document.querySelectorAll('.char-btn').forEach(btn => btn.classList.remove('active-btn')); document.getElementById(`btn-${char}`).classList.add('active-btn'); }
 function selectMode(mode) { mySelectedMode = mode; document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active-btn')); document.getElementById(`btn-mode-${mode}`).classList.add('active-btn'); }
-function startMatchmaking() { mmOverlay.style.display = 'flex'; mmText.innerText = `Ищем игру ${mySelectedMode} на ${mySelectedMode}...`; socket.emit('findMatch', { character: myCharacter, username: myUsername, mode: mySelectedMode }); }
+
+function startMatchmaking() { 
+    enableFullscreen(); // ВМИКАЄМО ПОВНИЙ ЕКРАН
+    mmOverlay.style.display = 'flex'; mmText.innerText = `Ищем игру ${mySelectedMode} на ${mySelectedMode}...`; 
+    socket.emit('findMatch', { character: myCharacter, username: myUsername, mode: mySelectedMode }); 
+}
+
 function cancelMatchmaking() { socket.emit('cancelMatchMatchmaking'); mmOverlay.style.display = 'none'; }
-function spectateRandomGame() { socket.emit('spectateRandom'); }
+
+function spectateRandomGame() { 
+    enableFullscreen(); // ВМИКАЄМО ПОВНИЙ ЕКРАН
+    socket.emit('spectateRandom'); 
+}
 
 socket.on('waiting', (msg) => { mmText.innerText = msg; });
 socket.on('matchFound', (data) => { isSpectator = false; currentRoom = data.roomId; gameState = data.state; myTeam = gameState.players[socket.id].team; mmOverlay.style.display = 'none'; menuDiv.style.display = 'none'; canvas.style.display = 'block'; chatContainer.style.display = 'flex'; if(chatToggleBtn) chatToggleBtn.style.display = 'flex'; wakeUpChat(); requestAnimationFrame(gameLoop); });
@@ -127,7 +152,6 @@ function gameLoop(timestamp) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (images.rink.complete) ctx.drawImage(images.rink, 0, 0, canvas.width, canvas.height);
     
-    // LERP для плавності
     if (gameState.puck.targetX !== undefined) {
         gameState.puck.x += (gameState.puck.targetX - gameState.puck.x) * 0.4;
         gameState.puck.y += (gameState.puck.targetY - gameState.puck.y) * 0.4;
@@ -146,8 +170,15 @@ function gameLoop(timestamp) {
         safeDrawCircleImage(img, p.x, p.y, PLAYER_RADIUS, p.rotation);
         
         ctx.fillStyle = (id === socket.id && !isSpectator) ? '#ffd700' : 'white'; ctx.font = '14px Arial'; ctx.textAlign = 'center'; 
-        let displayName = p.isBot ? `[BOT] ${p.username}` : p.username; ctx.fillText(displayName, p.x, p.y - PLAYER_RADIUS - 15);
-        let pingVal = p.ping || 0; ctx.fillStyle = pingVal > 150 ? '#ff4d4d' : (pingVal > 80 ? '#ffd633' : '#00ff00'); ctx.font = 'bold 12px Arial'; ctx.fillText(`${pingVal} ms`, p.x, p.y - PLAYER_RADIUS - 2);
+        let displayName = p.isBot ? `[BOT] ${p.username}` : p.username; 
+        
+        // Зберігаємо контекст, щоб текст не крутився догори ногами!
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.fillText(displayName, 0, - PLAYER_RADIUS - 15);
+        let pingVal = p.ping || 0; ctx.fillStyle = pingVal > 150 ? '#ff4d4d' : (pingVal > 80 ? '#ffd633' : '#00ff00'); ctx.font = 'bold 12px Arial'; 
+        ctx.fillText(`${pingVal} ms`, 0, - PLAYER_RADIUS - 2);
+        ctx.restore();
     }
 
     ctx.fillStyle = 'white'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center'; ctx.fillText(`${gameState.score.team1} : ${gameState.score.team2}`, canvas.width / 2, 50);
