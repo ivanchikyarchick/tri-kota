@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Три Кота Хоккей</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="auth">
+        <h1>Три Кота Хоккей</h1>
+        <div class="selection">
+            <input type="text" id="username" placeholder="Имя пользователя"><br><br>
+            <input type="password" id="password" placeholder="Пароль"><br><br>
+            <button onclick="login()" style="border-color: #4da6ff;">Войти</button>
+            <button onclick="register()" style="border-color: #ff99cc;">Регистрация</button>
+        </div>
+        <p id="auth-status"></p>
+    </div>
+
+    <div id="menu" style="display:none;">
+        <h1 id="welcome-text">Добро пожаловать!</h1>
+        <div class="selection">
+            <h3>Выбери персонажа:</h3>
+            <button id="btn-korzhik" onclick="selectCharacter('korzhik')">Коржик</button>
+            <button id="btn-karamelka" onclick="selectCharacter('karamelka')">Карамелька</button>
+        </div>
+        <div class="selection">
+            <h3>Режим игры:</h3>
+            <button onclick="startGame(1)">1 на 1</button>
+            <button onclick="startGame(2)">2 на 2</button>
+            <button onclick="startGame(3)">3 на 3</button>
+        </div>
+        <p id="status"></p>
+    </div>
+
+    <canvas id="gameCanvas" width="1200" height="600"></canvas>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="client.js"></script>
+</body>
+</html>
