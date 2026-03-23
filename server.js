@@ -12,13 +12,13 @@ const WIDTH = 1200, HEIGHT = 600;
 const PLAYER_RADIUS = 40, PUCK_RADIUS = 20;
 const FRICTION = 0.985, GOAL_HEIGHT = 150, WALL_PADDING = 25; 
 
-// База користувачів: { username: { password: "123", elo: 1000 } }
+// База користувачів
 const usersDb = {}; 
 const rooms = {};
 const queues = { 1: [], 2: [], 3: [] };
 let totalOnline = 0; 
 
-// АНТИ-БОТ: Рахуємо підключення з однієї IP-адреси
+// АНТИ-БОТ
 const ipConnections = {};
 
 function initGameState() {
@@ -62,7 +62,6 @@ function resetAfterGoal(roomId, scorerChar) {
     }, 2500);
 }
 
-// ОНОВЛЕННЯ ЕЛО
 function updateElo(roomId, finalScore) {
     const game = rooms[roomId];
     if (!game || game.eloAwarded) return;
@@ -75,11 +74,11 @@ function updateElo(roomId, finalScore) {
 
         let eloChange = 0;
         if (finalScore.team1 === finalScore.team2) {
-            eloChange = +10; // Нічия
+            eloChange = +10; 
         } else if ((p.team === 1 && finalScore.team1 > finalScore.team2) || (p.team === 2 && finalScore.team2 > finalScore.team1)) {
-            eloChange = +45; // Перемога
+            eloChange = +45; 
         } else {
-            eloChange = -15; // Поразка
+            eloChange = -15; 
         }
 
         dbUser.elo += eloChange;
@@ -131,7 +130,6 @@ function startGameLoop(roomId) {
             }
             if (state.goalTriggered) { puck.vx *= 0.5; puck.vy *= 0.5; }
 
-            // --- AFK ТА ШІ БОТІВ ---
             let now = Date.now();
             for (let id in state.players) {
                 let p = state.players[id];
@@ -175,12 +173,15 @@ function startGameLoop(roomId) {
 setInterval(() => { io.emit('pingTimer', Date.now()); }, 2000);
 
 io.on('connection', (socket) => {
-    // ЖОРСТКИЙ АНТИ-БОТ IP
-    let ip = socket.handshake.address;
+    // ВДОСКОНАЛЕНИЙ АНТИ-БОТ (Беремо справжній IP)
+    let ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
+    if (typeof ip === 'string') ip = ip.split(',')[0].trim(); // Якщо IP кілька, беремо перший
+
     if (!ipConnections[ip]) ipConnections[ip] = 0;
     ipConnections[ip]++;
     
-    if (ipConnections[ip] > 3) {
+    // Ліміт піднято до 15!
+    if (ipConnections[ip] > 15) {
         console.warn(`[АНТИ-БОТ] Заблоковано IP: ${ip}`);
         socket.disconnect(true);
         return;
@@ -261,7 +262,7 @@ io.on('connection', (socket) => {
     socket.on('chatMessage', (data) => { if (rooms[data.roomId]) io.to(data.roomId).emit('chatMessage', { sender: data.sender, text: data.text }); });
 
     socket.on('disconnect', () => {
-        ipConnections[ip]--; 
+        ipConnections[ip]--; // Зменшуємо лічильник при виході
         totalOnline--;
         io.emit('onlineCount', totalOnline);
         [1, 2, 3].forEach(mode => { queues[mode] = queues[mode].filter(p => p.socket.id !== socket.id); });
