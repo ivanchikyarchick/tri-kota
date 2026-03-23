@@ -410,50 +410,63 @@ function startGameLoop(roomId) {
                     const myGoalX  = isTeam1 ? WALL_PADDING + 60 : WIDTH - WALL_PADDING - 60;
                     const goalY    = HEIGHT / 2;
 
-                    // Оновлюємо ціль раз на 20 кадрів (~0.67 сек)
+                    // Параметри по складності
+                    // easy:   повільний, великий промах, рідко оновлює ціль
+                    // medium: середній
+                    // hard:   швидкий, малий промах, часто оновлює
+                    const diff = p.botDifficulty || 'medium';
+                    const cfg = {
+                        easy:   { tickAttack: 28, tickDefend: 10, miss: 70, moveFactor: 0.10, maxSpd: 14 },
+                        medium: { tickAttack: 18, tickDefend: 6,  miss: 35, moveFactor: 0.18, maxSpd: 22 },
+                        hard:   { tickAttack: 8,  tickDefend: 3,  miss: 8,  moveFactor: 0.28, maxSpd: 32 },
+                    }[diff];
+
                     if (!p._botTick) p._botTick = 0;
                     p._botTick--;
 
                     if (p._botTick <= 0) {
-                        const puckOnOurSide      = isTeam1 ? puck.x < WIDTH * 0.5 : puck.x > WIDTH * 0.5;
-                        const puckComingToGoal   = isTeam1 ? puck.vx < -2 : puck.vx > 2;
-                        const distPuckToMyGoal   = Math.abs(puck.x - myGoalX);
+                        const puckOnOurSide    = isTeam1 ? puck.x < WIDTH * 0.5 : puck.x > WIDTH * 0.5;
+                        const puckComingToGoal = isTeam1 ? puck.vx < -2 : puck.vx > 2;
+                        const distPuckToMyGoal = Math.abs(puck.x - myGoalX);
 
-                        if (puckComingToGoal && distPuckToMyGoal < 300) {
-                            // ЗАХИСТ: стаємо між шайбою і воротами
+                        if (puckComingToGoal && distPuckToMyGoal < 320) {
+                            // ЗАХИСТ
                             p._tx = myGoalX + (isTeam1 ? 70 : -70);
-                            p._ty = Math.max(goalY - GOAL_HEIGHT / 2 + PLAYER_RADIUS,
-                                    Math.min(goalY + GOAL_HEIGHT / 2 - PLAYER_RADIUS, puck.y));
-                            p._botTick = 6;
+                            p._ty = Math.max(
+                                goalY - GOAL_HEIGHT / 2 + PLAYER_RADIUS,
+                                Math.min(goalY + GOAL_HEIGHT / 2 - PLAYER_RADIUS,
+                                    puck.y + (Math.random() - 0.5) * cfg.miss * 0.5)
+                            );
+                            p._botTick = cfg.tickDefend;
                         } else if (puckOnOurSide) {
-                            // АТАКА: йдемо до шайби з боку + невеликий промах
-                            const miss = (Math.random() - 0.5) * 40;
+                            // АТАКА: підходимо збоку від шайби
+                            const miss = (Math.random() - 0.5) * cfg.miss;
                             p._tx = puck.x + (isTeam1 ? -55 : 55);
                             p._ty = puck.y + miss;
-                            p._botTick = 20;
+                            p._botTick = cfg.tickAttack;
                         } else {
-                            // ПОЗИЦІЯ: тримаємось у середині своєї половини
-                            const drift = (Math.random() - 0.5) * 30;
+                            // ПОЗИЦІЯ
+                            const drift = (Math.random() - 0.5) * cfg.miss * 0.6;
                             p._tx = myGoalX + (isTeam1 ? 180 : -180);
                             p._ty = goalY + (puck.y - goalY) * 0.4 + drift;
-                            p._botTick = 20;
+                            p._botTick = cfg.tickAttack;
                         }
                     }
 
-                    p.tx         = p._tx;
-                    p.ty         = p._ty;
-                    p.isDragging = true;
+                    p.tx           = p._tx;
+                    p.ty           = p._ty;
+                    p.isDragging   = true;
+                    p._botMoveCfg  = { factor: cfg.moveFactor, maxSpd: cfg.maxSpd };
                 }
                 // ─────────────────────────────────────────────────────────
 
                 if (p.isDragging && p.tx !== undefined && p.ty !== undefined) {
-                    const factor = p.isBot ? 0.12 : 0.4; // бот рухається плавніше
-                    p.vx = (p.tx - p.x) * factor;
-                    p.vy = (p.ty - p.y) * factor;
+                    const cfg    = p.isBot ? (p._botMoveCfg || { factor: 0.18, maxSpd: 22 }) : { factor: 0.4, maxSpd: 60 };
+                    p.vx = (p.tx - p.x) * cfg.factor;
+                    p.vy = (p.ty - p.y) * cfg.factor;
                     p.vr *= 0.95;
-                    const maxSpd = p.isBot ? 18 : 60; // бот повільніший
                     const speed = Math.sqrt(p.vx ** 2 + p.vy ** 2);
-                    if (speed > maxSpd) { p.vx = (p.vx / speed) * maxSpd; p.vy = (p.vy / speed) * maxSpd; }
+                    if (speed > cfg.maxSpd) { p.vx = (p.vx / speed) * cfg.maxSpd; p.vy = (p.vy / speed) * cfg.maxSpd; }
                 } else {
                     p.vx *= 0.94; p.vy *= 0.94; p.vr *= 0.97;
                     const speed = Math.sqrt(p.vx ** 2 + p.vy ** 2);
@@ -592,6 +605,54 @@ io.on('connection', (socket) => {
             }
         } catch (err) {
             console.error('findMatch error:', err);
+        }
+    });
+
+    // ── ТРЕНУВАННЯ З БОТОМ ───────────────────────────────────────────
+    socket.on('trainingMatch', (data) => {
+        try {
+            const roomId    = `training_${socket.id}_${Date.now()}`;
+            const gameState = initGameState();
+
+            // Гравець — команда 1
+            socket.join(roomId);
+            gameState.players[socket.id] = {
+                x: 150, y: 300,
+                char:         data.character,
+                team:         1,
+                username:     data.username,
+                ping:         0,
+                lastMoveTime: Date.now(),
+                isBot:        false,
+                isDragging:   false,
+            };
+
+            // Бот — команда 2
+            const botId = `bot_${roomId}`;
+            gameState.players[botId] = {
+                x: 1050, y: 300,
+                char:           'karamelka',
+                team:           2,
+                username:       `БОТ [${(data.difficulty || 'medium').toUpperCase()}]`,
+                ping:           0,
+                lastMoveTime:   Date.now(),
+                isBot:          true,
+                isDragging:     false,
+                botDifficulty:  data.difficulty || 'medium',
+            };
+
+            rooms[roomId] = {
+                state:      gameState,
+                players:    [socket.id],
+                endTime:    Date.now() + 180 * 1000,
+                eloAwarded: false,
+                isTraining: true,
+            };
+
+            socket.emit('matchFound', { roomId, state: gameState });
+            startGameLoop(roomId);
+        } catch (err) {
+            console.error('trainingMatch error:', err);
         }
     });
 
