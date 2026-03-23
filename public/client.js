@@ -3,17 +3,19 @@ const authDiv = document.getElementById('auth');
 const menuDiv = document.getElementById('menu');
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const statusText = document.getElementById('status');
 const authStatus = document.getElementById('auth-status');
 const chatContainer = document.getElementById('chat-container');
+const mmOverlay = document.getElementById('matchmaking-overlay');
+const mmText = document.getElementById('mm-text');
 
 let myUsername = '';
 let myCharacter = 'korzhik';
+let mySelectedMode = 1;
 let currentRoom = null;
 let myTeam = null; 
+let isSpectator = false; // Прапорець глядача
 
-const PLAYER_RADIUS = 40;
-const PUCK_RADIUS = 20;
+const PLAYER_RADIUS = 40, PUCK_RADIUS = 20;
 
 const images = { rink: new Image(), korzhik: new Image(), karamelka: new Image(), puck: new Image(), korGol: new Image(), carGol: new Image() };
 images.rink.src = 'assets/rink.jpg'; images.korzhik.src = 'assets/korzhik.png';
@@ -21,16 +23,9 @@ images.karamelka.src = 'assets/karamelka.png'; images.puck.src = 'assets/puck.pn
 images.korGol.src = 'assets/kor_gol.png'; images.carGol.src = 'assets/car_gol.png';
 
 let gameState = { players: {}, puck: { x: 600, y: 300 }, score: { team1: 0, team2: 0 }, timeLeft: 180 };
-let isDragging = false;
-let showGoalAnimation = false;
-let goalScorerChar = null;
-let goalAnimationStart = 0;
+let isDragging = false, showGoalAnimation = false, goalScorerChar = null, goalAnimationStart = 0;
 
-// === ЛІЧИЛЬНИК ОНЛАЙНУ ===
-socket.on('onlineCount', (count) => {
-    document.getElementById('online-counter').innerText = `Онлайн: ${count}`;
-});
-
+socket.on('onlineCount', (count) => { document.getElementById('online-counter').innerText = `Онлайн: ${count}`; });
 socket.on('pingTimer', (timestamp) => { socket.emit('pongTimer', timestamp); });
 
 function register() {
@@ -49,21 +44,62 @@ socket.on('authResult', (res) => {
     } else { authStatus.innerText = res.msg; authStatus.style.color = 'red'; }
 });
 
-function selectCharacter(char) { myCharacter = char; statusText.innerText = `Выбран: ${char === 'korzhik' ? 'Коржик' : 'Карамелька'}`; }
-function startGame(modePlayers) { socket.emit('findMatch', { character: myCharacter, username: myUsername, mode: modePlayers }); }
-socket.on('waiting', (msg) => { statusText.innerText = msg; });
+// === НОВЕ МЕНЮ ===
+function selectCharacter(char) {
+    myCharacter = char;
+    document.querySelectorAll('.char-btn').forEach(btn => btn.classList.remove('active-btn'));
+    document.getElementById(`btn-${char}`).classList.add('active-btn');
+}
+
+function selectMode(mode) {
+    mySelectedMode = mode;
+    document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active-btn'));
+    document.getElementById(`btn-mode-${mode}`).classList.add('active-btn');
+}
+
+function startMatchmaking() {
+    mmOverlay.style.display = 'flex'; // Показуємо анімацію
+    mmText.innerText = `Ищем игру ${mySelectedMode} на ${mySelectedMode}...`;
+    socket.emit('findMatch', { character: myCharacter, username: myUsername, mode: mySelectedMode });
+}
+
+function cancelMatchmaking() {
+    socket.emit('cancelMatchMatchmaking');
+    mmOverlay.style.display = 'none';
+}
+
+function spectateRandomGame() {
+    socket.emit('spectateRandom');
+}
+
+socket.on('waiting', (msg) => { mmText.innerText = msg; });
 
 socket.on('matchFound', (data) => {
+    isSpectator = false;
     currentRoom = data.roomId; gameState = data.state; myTeam = gameState.players[socket.id].team;
-    menuDiv.style.display = 'none'; canvas.style.display = 'block'; 
+    mmOverlay.style.display = 'none'; menuDiv.style.display = 'none'; canvas.style.display = 'block'; 
     chatContainer.style.display = 'flex'; wakeUpChat();
     requestAnimationFrame(gameLoop);
+});
+
+// Підключення ГЛЯДАЧА
+socket.on('spectateStart', (data) => {
+    isSpectator = true;
+    currentRoom = data.roomId; gameState = data.state; myTeam = null; // У глядача немає команди
+    mmOverlay.style.display = 'none'; menuDiv.style.display = 'none'; canvas.style.display = 'block'; 
+    chatContainer.style.display = 'flex'; wakeUpChat();
+    requestAnimationFrame(gameLoop);
+    alert('Вы подключились как зритель! 👁️');
+});
+
+socket.on('spectateError', (msg) => {
+    alert(msg);
 });
 
 socket.on('gs', (miniState) => {
     if (!currentRoom) return;
     gameState.puck.x = miniState.u.x; gameState.puck.y = miniState.u.y; 
-    gameState.score = miniState.s; gameState.timeLeft = miniState.t; // Отримуємо час
+    gameState.score = miniState.s; gameState.timeLeft = miniState.t; 
     for (let id in miniState.p) {
         if (gameState.players[id]) {
             gameState.players[id].x = miniState.p[id].x; gameState.players[id].y = miniState.p[id].y;
@@ -72,50 +108,41 @@ socket.on('gs', (miniState) => {
     }
 });
 
-// === КІНЕЦЬ ГРИ ===
 socket.on('gameOver', (finalScore) => {
-    let msg = "Ничья!";
-    if (myTeam === 1 && finalScore.team1 > finalScore.team2) msg = "ВЫ ПОБЕДИЛИ! 🎉";
-    else if (myTeam === 1 && finalScore.team1 < finalScore.team2) msg = "ВЫ ПРОИГРАЛИ! 😭";
-    else if (myTeam === 2 && finalScore.team2 > finalScore.team1) msg = "ВЫ ПОБЕДИЛИ! 🎉";
-    else if (myTeam === 2 && finalScore.team2 < finalScore.team1) msg = "ВЫ ПРОИГРАЛИ! 😭";
-    
+    let msg = "Матч окончен!";
+    if (!isSpectator) {
+        if (myTeam === 1 && finalScore.team1 > finalScore.team2) msg = "ВЫ ПОБЕДИЛИ! 🎉";
+        else if (myTeam === 1 && finalScore.team1 < finalScore.team2) msg = "ВЫ ПРОИГРАЛИ! 😭";
+        else if (myTeam === 2 && finalScore.team2 > finalScore.team1) msg = "ВЫ ПОБЕДИЛИ! 🎉";
+        else if (myTeam === 2 && finalScore.team2 < finalScore.team1) msg = "ВЫ ПРОИГРАЛИ! 😭";
+        else msg = "Ничья!";
+    }
     setTimeout(() => {
-        alert(`МАТЧ ОКОНЧЕН!\n\n${msg}\nИтоговый счет: ${finalScore.team1} : ${finalScore.team2}`);
-        location.reload(); // Перезавантажуємо для повернення в меню
+        alert(`${msg}\nИтоговый счет: ${finalScore.team1} : ${finalScore.team2}`);
+        location.reload(); 
     }, 500);
 });
 
-socket.on('playerDisconnected', () => { alert('Кто-то из игроков отключился. Матч завершен.'); location.reload(); });
+socket.on('playerDisconnected', () => { alert('Игроки покинули матч.'); location.reload(); });
 socket.on('goal', (char) => { goalScorerChar = char; showGoalAnimation = true; goalAnimationStart = performance.now(); });
 
-// === ЧАТ ТА ЗНИКАННЯ ===
+// === ЧАТ ===
 let chatTimeout;
 function wakeUpChat() {
-    chatContainer.style.opacity = '1';
-    clearTimeout(chatTimeout);
-    chatTimeout = setTimeout(() => {
-        if (document.activeElement !== document.getElementById('chat-input')) {
-            chatContainer.style.opacity = '0.3';
-        }
-    }, 4000);
+    chatContainer.style.opacity = '1'; clearTimeout(chatTimeout);
+    chatTimeout = setTimeout(() => { if (document.activeElement !== document.getElementById('chat-input')) chatContainer.style.opacity = '0.3'; }, 4000);
 }
-
 document.getElementById('chat-input').addEventListener('focus', () => { chatContainer.style.opacity = '1'; clearTimeout(chatTimeout); });
 document.getElementById('chat-input').addEventListener('blur', wakeUpChat);
-
 function sendChat() {
     const input = document.getElementById('chat-input'); const text = input.value.trim();
-    if (text && currentRoom) { socket.emit('chatMessage', { roomId: currentRoom, sender: myUsername, text: text }); input.value = ''; }
+    if (text && currentRoom) { 
+        let senderName = isSpectator ? `[Зритель] ${myUsername}` : myUsername;
+        socket.emit('chatMessage', { roomId: currentRoom, sender: senderName, text: text }); input.value = ''; 
+    }
 }
 document.getElementById('chat-input').addEventListener('keypress', function (e) { if (e.key === 'Enter') sendChat(); });
-
-socket.on('chatMessage', (data) => {
-    wakeUpChat(); // Будимо чат при новому повідомленні
-    const msgs = document.getElementById('chat-messages');
-    msgs.innerHTML += `<div><b>${data.sender}:</b> ${data.text}</div>`;
-    msgs.scrollTop = msgs.scrollHeight; 
-});
+socket.on('chatMessage', (data) => { wakeUpChat(); const msgs = document.getElementById('chat-messages'); msgs.innerHTML += `<div><b>${data.sender}:</b> ${data.text}</div>`; msgs.scrollTop = msgs.scrollHeight; });
 
 // === КЕРУВАННЯ ===
 function getEventPos(e) {
@@ -125,6 +152,7 @@ function getEventPos(e) {
     return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
 }
 function handleStart(e) {
+    if (isSpectator) return; // ГЛЯДАЧАМ ЗАБОРОНЕНО РУХАТИ!
     if (e.target.closest('#chat-container')) return; 
     if (!currentRoom || !myTeam || !gameState.players[socket.id]) return;
     const pos = getEventPos(e), myPlayer = gameState.players[socket.id], dx = pos.x - myPlayer.x, dy = pos.y - myPlayer.y;
@@ -132,19 +160,18 @@ function handleStart(e) {
 }
 function handleEnd() { isDragging = false; }
 function handleMove(e) {
+    if (isSpectator) return; // ГЛЯДАЧАМ ЗАБОРОНЕНО РУХАТИ!
     if (e.target.closest('#chat-container')) return; 
     if (e.cancelable) e.preventDefault(); 
     if (!isDragging || !currentRoom) return;
     socket.emit('move', { roomId: currentRoom, position: getEventPos(e) });
 }
-
 canvas.addEventListener('mousedown', handleStart); window.addEventListener('mouseup', handleEnd); canvas.addEventListener('mousemove', handleMove);
 canvas.addEventListener('touchstart', handleStart, { passive: false }); window.addEventListener('touchend', handleEnd); canvas.addEventListener('touchmove', handleMove, { passive: false });
 
 function safeDrawCircleImage(image, x, y, radius) {
     if (!image.complete || image.naturalWidth === 0) { ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = 'gray'; ctx.fill(); return; }
-    ctx.save(); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2, true); ctx.closePath(); ctx.clip();
-    ctx.drawImage(image, x - radius, y - radius, radius * 2, radius * 2); ctx.restore();
+    ctx.save(); ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2, true); ctx.closePath(); ctx.clip(); ctx.drawImage(image, x - radius, y - radius, radius * 2, radius * 2); ctx.restore();
 }
 
 function gameLoop(timestamp) {
@@ -158,36 +185,31 @@ function gameLoop(timestamp) {
         let p = gameState.players[id];
         let img = p.char === 'korzhik' ? images.korzhik : images.karamelka;
         safeDrawCircleImage(img, p.x, p.y, PLAYER_RADIUS);
-        ctx.fillStyle = 'white'; ctx.font = '14px Arial'; ctx.textAlign = 'center'; ctx.fillText(p.username, p.x, p.y - PLAYER_RADIUS - 15);
+        
+        // Малюємо нікнейм (жовтим для себе)
+        ctx.fillStyle = (id === socket.id && !isSpectator) ? '#ffd700' : 'white'; 
+        ctx.font = '14px Arial'; ctx.textAlign = 'center'; ctx.fillText(p.username, p.x, p.y - PLAYER_RADIUS - 15);
         let pingVal = p.ping || 0;
         ctx.fillStyle = pingVal > 150 ? '#ff4d4d' : (pingVal > 80 ? '#ffd633' : '#00ff00');
         ctx.font = 'bold 12px Arial'; ctx.fillText(`${pingVal} ms`, p.x, p.y - PLAYER_RADIUS - 2);
     }
 
-    // Рахунок
     ctx.fillStyle = 'white'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center';
     ctx.fillText(`${gameState.score.team1} : ${gameState.score.team2}`, canvas.width / 2, 50);
 
-    // ТАЙМЕР
-    let min = Math.floor(gameState.timeLeft / 60);
-    let sec = gameState.timeLeft % 60;
-    ctx.fillStyle = gameState.timeLeft <= 10 ? 'red' : 'yellow'; // Останні 10 секунд таймер червоніє
-    ctx.font = 'bold 24px Arial';
-    ctx.fillText(`⏱ ${min}:${sec < 10 ? '0' : ''}${sec}`, canvas.width / 2, 85);
+    let min = Math.floor(gameState.timeLeft / 60), sec = gameState.timeLeft % 60;
+    ctx.fillStyle = gameState.timeLeft <= 10 ? 'red' : 'yellow'; 
+    ctx.font = 'bold 24px Arial'; ctx.fillText(`⏱ ${min}:${sec < 10 ? '0' : ''}${sec}`, canvas.width / 2, 85);
 
     if (showGoalAnimation) {
         const elapsed = timestamp - goalAnimationStart;
         let opacity = Math.min(elapsed / 500, 0.6); 
         if (elapsed > 2000) opacity = Math.max(0, 0.6 - (elapsed - 2000) / 500);
         if (elapsed > 2500) showGoalAnimation = false;
-
         ctx.fillStyle = goalScorerChar === 'korzhik' ? `rgba(0, 100, 255, ${opacity})` : `rgba(255, 105, 180, ${opacity})`;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-
         const goalImg = goalScorerChar === 'korzhik' ? images.korGol : images.carGol;
-        if (goalImg.complete) {
-            ctx.globalAlpha = opacity / 0.6; ctx.drawImage(goalImg, canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300); ctx.globalAlpha = 1.0; 
-        }
+        if (goalImg.complete) { ctx.globalAlpha = opacity / 0.6; ctx.drawImage(goalImg, canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300); ctx.globalAlpha = 1.0; }
     }
     requestAnimationFrame(gameLoop);
 }
