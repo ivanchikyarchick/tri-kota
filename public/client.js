@@ -67,7 +67,7 @@ function selectCharacter(char) { myCharacter = char; document.querySelectorAll('
 function selectMode(mode) { mySelectedMode = mode; document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active-btn')); document.getElementById(`btn-mode-${mode}`).classList.add('active-btn'); }
 
 function startMatchmaking() { 
-    enableFullscreen(); // ВМИКАЄМО ПОВНИЙ ЕКРАН
+    enableFullscreen();
     mmOverlay.style.display = 'flex'; mmText.innerText = `Ищем игру ${mySelectedMode} на ${mySelectedMode}...`; 
     socket.emit('findMatch', { character: myCharacter, username: myUsername, mode: mySelectedMode }); 
 }
@@ -75,8 +75,32 @@ function startMatchmaking() {
 function cancelMatchmaking() { socket.emit('cancelMatchMatchmaking'); mmOverlay.style.display = 'none'; }
 
 function spectateRandomGame() { 
-    enableFullscreen(); // ВМИКАЄМО ПОВНИЙ ЕКРАН
+    enableFullscreen();
     socket.emit('spectateRandom'); 
+}
+
+// === ТРЕНУВАННЯ ===
+let selectedDifficulty = 'medium';
+
+function openTrainingModal() {
+    document.getElementById('training-modal').classList.add('open');
+}
+function closeTrainingModal() {
+    document.getElementById('training-modal').classList.remove('open');
+}
+function selectDiff(d) {
+    selectedDifficulty = d;
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`.diff-btn[data-d="${d}"]`).classList.add('active');
+}
+function startTraining() {
+    closeTrainingModal();
+    enableFullscreen();
+    socket.emit('trainingMatch', {
+        character:  myCharacter,
+        username:   myUsername,
+        difficulty: selectedDifficulty,
+    });
 }
 
 socket.on('waiting', (msg) => { mmText.innerText = msg; });
