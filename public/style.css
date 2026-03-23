@@ -11,7 +11,7 @@ body, html {
 #menu {
     position: absolute;
     top: 50%;
-    left: 50%;
+    left: 50%;ф
     transform: translate(-50%, -50%);
     background: rgba(255, 255, 255, 0.95);
     padding: 40px;
@@ -158,5 +158,70 @@ button:hover { background-color: #f0f0f0; transform: translateY(-2px); }
     }
     h1 {
         font-size: 24px;
+    }
+}
+/* --- СТИЛІ ДЛЯ ЧАТУ --- */
+#chat-container {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 300px;
+    background: rgba(0, 0, 0, 0.6);
+    border-radius: 10px;
+    display: flex;
+    flex-direction: column;
+    z-index: 100;
+    pointer-events: auto; /* Щоб можна було клікати */
+}
+
+#chat-messages {
+    height: 150px;
+    overflow-y: auto;
+    color: white;
+    padding: 10px;
+    font-size: 14px;
+    text-align: left;
+    text-shadow: 1px 1px 2px black;
+}
+
+#chat-messages div {
+    margin-bottom: 5px;
+    word-wrap: break-word;
+}
+
+#chat-input-wrapper {
+    display: flex;
+    border-top: 1px solid rgba(255,255,255,0.2);
+}
+
+#chat-input {
+    flex-grow: 1;
+    border: none;
+    padding: 8px;
+    border-radius: 0 0 0 10px;
+    background: rgba(255, 255, 255, 0.9);
+    width: auto;
+}
+
+#chat-btn {
+    padding: 8px 15px;
+    margin: 0;
+    border: none;
+    background: #4da6ff;
+    color: white;
+    border-radius: 0 0 10px 0;
+    cursor: pointer;
+}
+
+/* На телефонах робимо чат трохи меншим */
+@media (max-width: 600px) {
+    #chat-container {
+        width: 250px;
+        bottom: 10px;
+        left: 10px;
+    }
+    #chat-messages {
+        height: 100px;
+        font-size: 12px;
     }
 }
