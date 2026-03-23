@@ -426,14 +426,16 @@ function startGameLoop(roomId) {
                                     Math.min(goalY + GOAL_HEIGHT / 2 - PLAYER_RADIUS, puck.y));
                             p._botTick = 6;
                         } else if (puckOnOurSide) {
-                            // АТАКА: йдемо до шайби з боку
+                            // АТАКА: йдемо до шайби з боку + невеликий промах
+                            const miss = (Math.random() - 0.5) * 40;
                             p._tx = puck.x + (isTeam1 ? -55 : 55);
-                            p._ty = puck.y;
+                            p._ty = puck.y + miss;
                             p._botTick = 20;
                         } else {
                             // ПОЗИЦІЯ: тримаємось у середині своєї половини
+                            const drift = (Math.random() - 0.5) * 30;
                             p._tx = myGoalX + (isTeam1 ? 180 : -180);
-                            p._ty = goalY + (puck.y - goalY) * 0.4;
+                            p._ty = goalY + (puck.y - goalY) * 0.4 + drift;
                             p._botTick = 20;
                         }
                     }
@@ -445,11 +447,13 @@ function startGameLoop(roomId) {
                 // ─────────────────────────────────────────────────────────
 
                 if (p.isDragging && p.tx !== undefined && p.ty !== undefined) {
-                    p.vx = (p.tx - p.x) * 0.4;
-                    p.vy = (p.ty - p.y) * 0.4;
+                    const factor = p.isBot ? 0.12 : 0.4; // бот рухається плавніше
+                    p.vx = (p.tx - p.x) * factor;
+                    p.vy = (p.ty - p.y) * factor;
                     p.vr *= 0.95;
+                    const maxSpd = p.isBot ? 18 : 60; // бот повільніший
                     const speed = Math.sqrt(p.vx ** 2 + p.vy ** 2);
-                    if (speed > 60) { p.vx = (p.vx / speed) * 60; p.vy = (p.vy / speed) * 60; }
+                    if (speed > maxSpd) { p.vx = (p.vx / speed) * maxSpd; p.vy = (p.vy / speed) * maxSpd; }
                 } else {
                     p.vx *= 0.94; p.vy *= 0.94; p.vr *= 0.97;
                     const speed = Math.sqrt(p.vx ** 2 + p.vy ** 2);
