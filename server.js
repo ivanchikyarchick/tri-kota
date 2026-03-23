@@ -145,6 +145,31 @@ io.on('connection', (socket) => {
         } else { socket.emit('waiting', `Ожидание игроков (${queue.length}/${mode * 2})...`); }
     });
 
+    // --- СКАСУВАННЯ ПОШУКУ ---
+    socket.on('cancelMatchMatchmaking', () => {
+        [1, 2, 3].forEach(mode => {
+            queues[mode] = queues[mode].filter(p => p.socket.id !== socket.id);
+        });
+    });
+
+    // --- РЕЖИМ ГЛЯДАЧА ---
+    socket.on('spectateRandom', () => {
+        const activeRoomsIds = Object.keys(rooms);
+        if (activeRoomsIds.length === 0) {
+            socket.emit('spectateError', 'Сейчас нет активных игр 😔');
+            return;
+        }
+        
+        // Вибираємо випадкову активну кімнату
+        const randomRoomId = activeRoomsIds[Math.floor(Math.random() * activeRoomsIds.length)];
+        
+        socket.join(randomRoomId); // Глядач просто слухає кімнату
+        socket.emit('spectateStart', { 
+            roomId: randomRoomId, 
+            state: rooms[randomRoomId].state 
+        });
+    });
+
     socket.on('move', (data) => {
         if (!data.roomId || !rooms[data.roomId]) return;
         const player = rooms[data.roomId].state.players[socket.id];
