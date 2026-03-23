@@ -1,56 +1,24 @@
-/* =========================================
-   ГЛОБАЛЬНІ НАЛАШТУВАННЯ
-========================================= */
-* {
-    box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 body, html {
-    margin: 0; 
-    padding: 0; 
-    width: 100%; 
-    height: 100%;
-    overflow: hidden; 
-    /* Гарний радіальний градієнт на фоні, поки гра не почалася */
+    margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; 
     background: radial-gradient(circle at center, #1e3c72 0%, #2a5298 50%, #111 100%);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    /* Забороняємо виділення тексту на телефонах */
-    -webkit-user-select: none; 
-    user-select: none;
+    -webkit-user-select: none; user-select: none;
 }
 
-/* =========================================
-   ЛІЧИЛЬНИК ОНЛАЙНУ
-========================================= */
 #online-counter {
-    position: fixed; 
-    top: 15px; 
-    right: 20px;
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(5px);
-    color: #fff; 
-    font-weight: 600; 
-    font-size: 15px;
-    padding: 8px 18px; 
-    border-radius: 20px; 
-    z-index: 1000; 
-    pointer-events: none;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    position: fixed; top: 15px; right: 20px;
+    background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(5px);
+    color: #fff; font-weight: 600; font-size: 15px;
+    padding: 8px 18px; border-radius: 20px; z-index: 1000; pointer-events: none;
+    display: flex; align-items: center; gap: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Неонова крапка "LIVE" */
 #online-counter::before {
-    content: ''; 
-    display: inline-block;
-    width: 10px; 
-    height: 10px; 
-    border-radius: 50%;
-    background-color: #00ffcc;
-    box-shadow: 0 0 10px #00ffcc;
+    content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    background-color: #00ffcc; box-shadow: 0 0 10px #00ffcc;
     animation: pulse 2s infinite;
 }
 
@@ -60,270 +28,50 @@ body, html {
     100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 204, 0); }
 }
 
-/* =========================================
-   ВІКНА МЕНЮ ТА АВТОРИЗАЦІЇ (GLASSMORPHISM)
-========================================= */
 #auth, #menu {
-    position: absolute; 
-    top: 50%; 
-    left: 50%; 
-    transform: translate(-50%, -50%);
-    background: rgba(255, 255, 255, 0.85);
-    backdrop-filter: blur(15px); /* Ефект матового скла */
-    -webkit-backdrop-filter: blur(15px);
-    padding: 40px 50px; 
-    border-radius: 24px;
-    text-align: center; 
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
+    padding: 40px 50px; border-radius: 24px; text-align: center; 
     box-shadow: 0 15px 35px rgba(0,0,0,0.5), 0 0 20px rgba(77, 166, 255, 0.2); 
-    border: 1px solid rgba(255, 255, 255, 0.5);
-    z-index: 10; 
-    width: 90%; 
-    max-width: 450px;
+    border: 1px solid rgba(255, 255, 255, 0.5); z-index: 10; width: 90%; max-width: 450px;
 }
 
-h1 {
-    color: #222;
-    margin-top: 0;
-    font-size: 28px;
-    text-shadow: 1px 1px 2px rgba(255,255,255,0.8);
-}
+h1 { color: #222; margin-top: 0; font-size: 28px; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); }
+h3 { color: #444; margin-bottom: 10px; }
+.selection { margin-bottom: 20px; }
 
-h3 {
-    color: #444;
-    margin-bottom: 10px;
-}
-
-.selection {
-    margin-bottom: 20px;
-}
-
-/* =========================================
-   ПОЛЯ ВВОДУ ТА КНОПКИ
-========================================= */
 input { 
-    width: 100%; 
-    padding: 14px 15px; 
-    margin-bottom: 15px;
-    font-size: 16px; 
-    border-radius: 12px; 
-    border: 2px solid #ddd; 
-    background: rgba(255, 255, 255, 0.9);
-    transition: all 0.3s ease; 
-    outline: none;
+    width: 100%; padding: 14px 15px; margin-bottom: 15px; font-size: 16px; 
+    border-radius: 12px; border: 2px solid #ddd; background: rgba(255, 255, 255, 0.9);
+    transition: all 0.3s ease; outline: none;
 }
-
-input:focus {
-    border-color: #4da6ff;
-    box-shadow: 0 0 8px rgba(77, 166, 255, 0.4);
-}
+input:focus { border-color: #4da6ff; box-shadow: 0 0 8px rgba(77, 166, 255, 0.4); }
 
 button { 
-    padding: 12px 20px; 
-    margin: 6px; 
-    font-size: 16px; 
-    font-weight: bold; 
-    cursor: pointer; 
-    border: none; 
-    border-radius: 12px; 
-    background-color: #f0f0f0; 
-    color: #333;
-    transition: all 0.2s ease; 
-    -webkit-appearance: none; 
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    padding: 12px 20px; margin: 6px; font-size: 16px; font-weight: bold; cursor: pointer; 
+    border: none; border-radius: 12px; background-color: #f0f0f0; color: #333;
+    transition: all 0.2s ease; -webkit-appearance: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
 }
+button:hover { transform: translateY(-3px); box-shadow: 0 7px 12px rgba(0,0,0,0.15); }
+button:active { transform: translateY(0); box-shadow: 0 3px 5px rgba(0,0,0,0.1); }
 
-button:hover { 
-    transform: translateY(-3px); 
-    box-shadow: 0 7px 12px rgba(0,0,0,0.15); 
-}
-
-button:active {
-    transform: translateY(0);
-    box-shadow: 0 3px 5px rgba(0,0,0,0.1);
-}
-
-/* Кастомні кольори персонажів */
 #btn-korzhik { background: #e6f2ff; color: #0066cc; border: 2px solid #4da6ff; }
 #btn-korzhik:hover { background: #4da6ff; color: white; }
-
 #btn-karamelka { background: #ffe6f2; color: #cc0066; border: 2px solid #ff99cc; }
 #btn-karamelka:hover { background: #ff99cc; color: white; }
 
-/* =========================================
-   ІГРОВЕ ПОЛЕ ТА ТЕКСТИ
-========================================= */
-#gameCanvas { 
-    display: none; 
-    width: 100vw; 
-    height: 100vh; 
-    object-fit: cover; 
-    touch-action: none; 
-}
-
-#status, #auth-status { 
-    font-size: 15px; 
-    font-weight: 600;
-    color: #666; 
-    margin-top: 15px; 
-}
-
-/* =========================================
-   РОЗУМНИЙ ЧАТ
-========================================= */
-#chat-container {
-    position: absolute; 
-    bottom: 20px; 
-    left: 20px; 
-    width: 320px;
-    background: rgba(15, 20, 30, 0.75); 
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border-radius: 16px; 
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    display: flex; 
-    flex-direction: column;
-    z-index: 100; 
-    pointer-events: auto;
-    transition: opacity 0.4s ease, transform 0.4s ease; 
-    opacity: 0.3; 
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-}
-
-#chat-container:hover, #chat-container:focus-within { 
-    opacity: 1 !important; 
-    transform: translateY(-5px);
-}
-
-#chat-messages { 
-    height: 160px; 
-    overflow-y: auto; 
-    color: #eee; 
-    padding: 12px; 
-    font-size: 14px; 
-    text-align: left; 
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8); 
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-
-#chat-messages div { word-wrap: break-word; line-height: 1.3; }
-#chat-messages div b { color: #4da6ff; font-weight: bold; }
-
-/* Кастомний скроллбар для чату */
-#chat-messages::-webkit-scrollbar { width: 6px; }
-#chat-messages::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
-#chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.4); border-radius: 10px; }
-#chat-messages::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.7); }
-
-#chat-input-wrapper { 
-    display: flex; 
-    border-top: 1px solid rgba(255,255,255,0.15); 
-    padding: 6px;
-    background: rgba(0,0,0,0.3);
-    border-radius: 0 0 16px 16px;
-}
-
-#chat-input { 
-    flex-grow: 1; 
-    border: none; 
-    padding: 10px 15px; 
-    border-radius: 12px; 
-    background: rgba(255, 255, 255, 0.1); 
-    color: white; 
-    width: auto; 
-    outline: none; 
-    font-size: 14px;
-    margin-bottom: 0;
-}
-
-#chat-input::placeholder { color: rgba(255,255,255,0.6); }
-#chat-input:focus { background: rgba(255, 255, 255, 0.2); box-shadow: none; }
-
-#chat-btn { 
-    padding: 10px 15px; 
-    margin: 0 0 0 6px; 
-    border: none; 
-    background: #4da6ff; 
-    color: white; 
-    border-radius: 12px; 
-    cursor: pointer; 
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: none;
-}
-
-#chat-btn:hover { background: #66b3ff; transform: scale(1.05); }
-
-/* =========================================
-   МОБІЛЬНА АДАПТАЦІЯ
-========================================= */
-@media (max-width: 600px) {
-    #auth, #menu { 
-        width: 92%; 
-        padding: 25px 20px; 
-    }
-    
-    button { 
-        width: 100%; 
-        margin: 6px 0; 
-        padding: 15px; 
-    }
-    
-    #chat-container { 
-        width: 260px; 
-        bottom: 10px; 
-        left: 10px; 
-    }
-    
-    #chat-messages { 
-        height: 120px; 
-        font-size: 13px; 
-    }
-    
-    #online-counter {
-        top: 10px;
-        right: 10px;
-        font-size: 13px;
-        padding: 6px 12px;
-    }
-}
-
-/* --- НОВІ СТИЛІ МЕНЮ ТА АНІМАЦІЙ --- */
-
-/* Підсвітка активних кнопок вибору */
 .char-btn.active-btn, .mode-btn.active-btn {
-    background: #4da6ff !important;
-    color: white !important;
-    box-shadow: 0 0 15px rgba(77, 166, 255, 0.6);
-    transform: scale(1.05);
+    background: #4da6ff !important; color: white !important;
+    box-shadow: 0 0 15px rgba(77, 166, 255, 0.6); transform: scale(1.05);
 }
 
-.action-buttons {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    margin-top: 30px;
-    gap: 15px;
-}
+.action-buttons { display: flex; flex-direction: column; align-items: center; margin-top: 30px; gap: 15px; }
 
-/* Велика кнопка СТАРТ */
 #btn-start {
-    width: 80%;
-    padding: 20px;
-    font-size: 24px;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    background: linear-gradient(45deg, #00c6ff, #0072ff);
-    color: white;
-    border: none;
-    border-radius: 15px;
-    box-shadow: 0 10px 20px rgba(0, 114, 255, 0.4);
-    animation: pulseStart 2s infinite;
+    width: 80%; padding: 20px; font-size: 24px; font-weight: 900; text-transform: uppercase; letter-spacing: 2px;
+    background: linear-gradient(45deg, #00c6ff, #0072ff); color: white; border: none; border-radius: 15px;
+    box-shadow: 0 10px 20px rgba(0, 114, 255, 0.4); animation: pulseStart 2s infinite;
 }
-
 #btn-start:hover { transform: scale(1.05); background: linear-gradient(45deg, #0072ff, #00c6ff); }
 
 @keyframes pulseStart {
@@ -332,103 +80,70 @@ button:active {
     100% { box-shadow: 0 0 0 0 rgba(0, 114, 255, 0); }
 }
 
-/* Кнопка споглядання */
-#btn-spectate {
-    background: rgba(0,0,0,0.05);
-    border: 1px solid #ccc;
-    color: #555;
-    font-size: 14px;
-    padding: 10px 20px;
-}
+#btn-spectate { background: rgba(0,0,0,0.05); border: 1px solid #ccc; color: #555; font-size: 14px; padding: 10px 20px; }
 
-/* --- ЕКРАН МАТЧМЕЙКІНГУ (РАДАР) --- */
+#gameCanvas { display: none; width: 100vw; height: 100vh; object-fit: cover; touch-action: none; }
+#status, #auth-status { font-size: 15px; font-weight: 600; color: #666; margin-top: 15px; }
+
+/* РАДАР */
 #matchmaking-overlay {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(10, 15, 30, 0.9);
-    backdrop-filter: blur(10px);
-    z-index: 2000;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(10, 15, 30, 0.9); backdrop-filter: blur(10px);
+    z-index: 2000; display: flex; flex-direction: column; align-items: center; justify-content: center;
 }
-
-#mm-text {
-    color: white; margin-top: 40px; font-size: 22px; font-weight: 300; letter-spacing: 1px;
-    animation: blinkText 1.5s infinite;
-}
-
+#mm-text { color: white; margin-top: 40px; font-size: 22px; font-weight: 300; letter-spacing: 1px; animation: blinkText 1.5s infinite; }
 @keyframes blinkText { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-/* Анімація радара */
 .radar {
-    width: 120px; height: 120px;
-    background: rgba(0, 255, 204, 0.2);
-    border-radius: 50%;
-    position: relative;
-    border: 2px solid rgba(0, 255, 204, 0.5);
-    box-shadow: 0 0 30px rgba(0, 255, 204, 0.3);
+    width: 120px; height: 120px; background: rgba(0, 255, 204, 0.2); border-radius: 50%;
+    position: relative; border: 2px solid rgba(0, 255, 204, 0.5); box-shadow: 0 0 30px rgba(0, 255, 204, 0.3);
 }
-
 .radar::after {
-    content: ''; position: absolute; top: 50%; left: 50%;
-    width: 60px; height: 60px;
+    content: ''; position: absolute; top: 50%; left: 50%; width: 60px; height: 60px;
     background: conic-gradient(from 0deg, rgba(0,255,204,0) 70%, rgba(0,255,204,0.8) 100%);
-    border-radius: 100% 0 0 0;
-    transform-origin: bottom right;
-    animation: scan 1.5s linear infinite;
-    transform: translate(-100%, -100%);
+    border-radius: 100% 0 0 0; transform-origin: bottom right; animation: scan 1.5s linear infinite; transform: translate(-100%, -100%);
 }
+@keyframes scan { 100% { transform: translate(-100%, -100%) rotate(360deg); } }
 
-@keyframes scan {
-    100% { transform: translate(-100%, -100%) rotate(360deg); }
+/* ЧАТ */
+#chat-container {
+    position: absolute; bottom: 20px; left: 20px; width: 320px;
+    background: rgba(15, 20, 30, 0.75); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.15); display: flex; flex-direction: column;
+    z-index: 100; pointer-events: auto; transition: opacity 0.4s ease, transform 0.4s ease; opacity: 0.3; 
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
+#chat-container:hover, #chat-container:focus-within { opacity: 1 !important; transform: translateY(-5px); }
+#chat-messages { height: 160px; overflow-y: auto; color: #eee; padding: 12px; font-size: 14px; text-align: left; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); display: flex; flex-direction: column; gap: 6px; }
+#chat-messages div { word-wrap: break-word; line-height: 1.3; }
+#chat-messages div b { color: #4da6ff; font-weight: bold; }
+#chat-messages::-webkit-scrollbar { width: 6px; }
+#chat-messages::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 10px; }
+#chat-messages::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.4); border-radius: 10px; }
+#chat-messages::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.7); }
+#chat-input-wrapper { display: flex; border-top: 1px solid rgba(255,255,255,0.15); padding: 6px; background: rgba(0,0,0,0.3); border-radius: 0 0 16px 16px; }
+#chat-input { flex-grow: 1; border: none; padding: 10px 15px; border-radius: 12px; background: rgba(255, 255, 255, 0.1); color: white; width: auto; outline: none; font-size: 14px; margin-bottom: 0; }
+#chat-input::placeholder { color: rgba(255,255,255,0.6); }
+#chat-input:focus { background: rgba(255, 255, 255, 0.2); box-shadow: none; }
+#chat-btn { padding: 10px 15px; margin: 0 0 0 6px; border: none; background: #4da6ff; color: white; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: none; }
+#chat-btn:hover { background: #66b3ff; transform: scale(1.05); }
 
-/* --- КНОПКА СХОВАТИ/ПОКАЗАТИ ЧАТ --- */
+/* КНОПКА СХОВАТИ ЧАТ */
 #chat-toggle-btn {
-    position: absolute;
-    bottom: 240px; /* Знаходиться трохи вище самого чату */
-    left: 20px;
-    background: rgba(0, 0, 0, 0.6);
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    font-size: 20px;
-    cursor: pointer;
-    z-index: 101;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    backdrop-filter: blur(5px);
-    transition: all 0.3s ease;
-    padding: 0;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    position: absolute; bottom: 240px; left: 20px; background: rgba(0, 0, 0, 0.6); color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 50%; width: 40px; height: 40px;
+    font-size: 20px; cursor: pointer; z-index: 101; display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(5px); transition: all 0.3s ease; padding: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
 }
+#chat-toggle-btn:hover { transform: scale(1.15); background: rgba(77, 166, 255, 0.6); }
+#chat-toggle-btn.chat-hidden { bottom: 20px; opacity: 0.5; }
+#chat-toggle-btn.chat-hidden:hover { opacity: 1; }
 
-#chat-toggle-btn:hover {
-    transform: scale(1.15);
-    background: rgba(77, 166, 255, 0.6);
-}
-
-/* Клас, коли чат схований (опускаємо кнопку в кут) */
-#chat-toggle-btn.chat-hidden {
-    bottom: 20px;
-    opacity: 0.5;
-}
-
-#chat-toggle-btn.chat-hidden:hover {
-    opacity: 1;
-}
-
-/* Адаптація кнопки для мобільних телефонів */
 @media (max-width: 600px) {
-    #chat-toggle-btn {
-        bottom: 180px;
-        left: 10px;
-        width: 35px;
-        height: 35px;
-        font-size: 16px;
-    }
-    #chat-toggle-btn.chat-hidden {
-        bottom: 10px;
-    }
+    #auth, #menu { width: 92%; padding: 25px 20px; }
+    button { width: 100%; margin: 6px 0; padding: 15px; }
+    #chat-container { width: 260px; bottom: 10px; left: 10px; }
+    #chat-messages { height: 120px; font-size: 13px; }
+    #online-counter { top: 10px; right: 10px; font-size: 13px; padding: 6px 12px; }
+    #chat-toggle-btn { bottom: 180px; left: 10px; width: 35px; height: 35px; font-size: 16px; }
+    #chat-toggle-btn.chat-hidden { bottom: 10px; }
 }
