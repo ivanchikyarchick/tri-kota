@@ -22,18 +22,30 @@
 
     <div id="menu" style="display:none;">
         <h1 id="welcome-text">Добро пожаловать!</h1>
+        
         <div class="selection">
-            <h3>Выбери персонажа:</h3>
-            <button id="btn-korzhik" onclick="selectCharacter('korzhik')">Коржик</button>
-            <button id="btn-karamelka" onclick="selectCharacter('karamelka')">Карамелька</button>
+            <h3>1. Выбери персонажа:</h3>
+            <button id="btn-korzhik" class="char-btn active-btn" onclick="selectCharacter('korzhik')">Коржик</button>
+            <button id="btn-karamelka" class="char-btn" onclick="selectCharacter('karamelka')">Карамелька</button>
         </div>
+        
         <div class="selection">
-            <h3>Режим игры:</h3>
-            <button onclick="startGame(1)">1 на 1</button>
-            <button onclick="startGame(2)">2 на 2</button>
-            <button onclick="startGame(3)">3 на 3</button>
+            <h3>2. Выбери режим:</h3>
+            <button id="btn-mode-1" class="mode-btn active-btn" onclick="selectMode(1)">1 на 1</button>
+            <button id="btn-mode-2" class="mode-btn" onclick="selectMode(2)">2 на 2</button>
+            <button id="btn-mode-3" class="mode-btn" onclick="selectMode(3)">3 на 3</button>
         </div>
-        <p id="status"></p>
+        
+        <div class="action-buttons">
+            <button id="btn-start" onclick="startMatchmaking()">СТАРТ</button>
+            <button id="btn-spectate" onclick="spectateRandomGame()">👁 Смотреть игру</button>
+        </div>
+    </div>
+
+    <div id="matchmaking-overlay" style="display: none;">
+        <div class="radar"></div>
+        <h2 id="mm-text">Поиск достойного соперника...</h2>
+        <button onclick="cancelMatchmaking()" style="margin-top: 30px; border-color: #ff4d4d; color: #ff4d4d;">Отмена</button>
     </div>
 
     <div id="chat-container" style="display: none;">
