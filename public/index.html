@@ -40,7 +40,25 @@
         
         <div class="action-buttons">
             <button id="btn-start" onclick="startMatchmaking()">СТАРТ</button>
+            <button id="btn-training" onclick="openTrainingModal()" style="border-color: #4dff88; color: #4dff88;">🤖 Тренировка</button>
             <button id="btn-spectate" onclick="spectateRandomGame()">👁 Смотреть игру</button>
+        </div>
+    </div>
+
+    <!-- МОДАЛКА ТРЕНУВАННЯ -->
+    <div id="training-modal">
+        <div class="training-box">
+            <h2>🤖 Тренировка с ботом</h2>
+            <p>Выюерите сложность</p>
+            <div class="diff-btns">
+                <button class="diff-btn" data-d="easy"   onclick="selectDiff('easy')">😸 Легко</button>
+                <button class="diff-btn active" data-d="medium" onclick="selectDiff('medium')">😼 Обычный</button>
+                <button class="diff-btn" data-d="hard"   onclick="selectDiff('hard')">😾 Сложно</button>
+            </div>
+            <div>
+                <button class="training-start-btn" onclick="startTraining()">▶ Играть</button>
+                <button class="training-cancel-btn" onclick="closeTrainingModal()">Зассал</button>
+            </div>
         </div>
     </div>
 
