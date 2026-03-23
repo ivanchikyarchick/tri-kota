@@ -28,6 +28,7 @@ body, html {
     100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 255, 204, 0); }
 }
 
+
 #auth, #menu {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
     background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
@@ -59,6 +60,8 @@ button:active { transform: translateY(0); box-shadow: 0 3px 5px rgba(0,0,0,0.1);
 #btn-korzhik:hover { background: #4da6ff; color: white; }
 #btn-karamelka { background: #ffe6f2; color: #cc0066; border: 2px solid #ff99cc; }
 #btn-karamelka:hover { background: #ff99cc; color: white; }
+#btn-kompot { background: #e6ffe6; color: #009900; border: 2px solid #33cc33; }
+#btn-kompot:hover { background: #33cc33; color: white; }
 
 .char-btn.active-btn, .mode-btn.active-btn {
     background: #4da6ff !important; color: white !important;
