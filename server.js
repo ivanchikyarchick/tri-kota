@@ -404,25 +404,45 @@ function startGameLoop(roomId) {
 
                 p.vx = p.vx || 0; p.vy = p.vy || 0; p.vr = p.vr || 0;
 
-                // ── РОЗУМНИЙ ШІ ───────────────────────────────────────────
-                if (p.isBot && !state.goalTriggered) {
-                    const teammates = playerKeys
-                        .filter(tid => tid !== id && state.players[tid]?.team === p.team)
-                        .map(tid => state.players[tid]);
-                    const enemies = playerKeys
-                        .filter(eid => state.players[eid]?.team !== p.team)
-                        .map(eid => state.players[eid]);
-                    const enemyIds = playerKeys.filter(eid => state.players[eid]?.team !== p.team);
+// Замінити блок "РОЗУМНИЙ ШІ" в ігровому циклі:
 
-                    const decision   = getBotDecision(p, puck, teammates, enemies, remainingSeconds, state.score, enemyIds);
-                    const adaptLevel = getAdaptiveLevel(enemyIds[0]);
+if (p.isBot && !state.goalTriggered) {
+    const teammates = playerKeys
+        .filter(tid => tid !== id && state.players[tid]?.team === p.team)
+        .map(tid => state.players[tid]);
+    const enemies = playerKeys
+        .filter(eid => state.players[eid]?.team !== p.team)
+        .map(eid => state.players[eid]);
+    const enemyIds = playerKeys.filter(eid => state.players[eid]?.team !== p.team);
 
-                    p.tx       = decision.tx + (Math.random() - 0.5) * adaptLevel.jitter;
-                    p.ty       = decision.ty + (Math.random() - 0.5) * adaptLevel.jitter;
-                    p.isDragging = true;
-                    p._botMode   = decision.mode;
-                }
-                // ─────────────────────────────────────────────────────────
+    // Ініціалізація лічильника
+    if (p._botTicksLeft === undefined) p._botTicksLeft = 0;
+
+    const distToTarget = p._targetX !== undefined
+        ? Math.hypot(p.x - p._targetX, p.y - p._targetY)
+        : 999;
+
+    // Перераховуємо рішення тільки якщо:
+    // — закінчились "тіки" поточної цілі, АБО
+    // — бот вже майже дійшов до неї (< 20px)
+    if (p._botTicksLeft <= 0 || distToTarget < 20) {
+        const decision   = getBotDecision(p, puck, teammates, enemies, remainingSeconds, state.score, enemyIds);
+        const adaptLevel = getAdaptiveLevel(enemyIds[0]);
+
+        p._targetX     = decision.tx + (Math.random() - 0.5) * adaptLevel.jitter;
+        p._targetY     = decision.ty + (Math.random() - 0.5) * adaptLevel.jitter;
+        p._botMode     = decision.mode;
+
+        // Термінові режими — оновлюємо частіше (6 кадрів)
+        // Спокійні режими — рідше (18 кадрів = ~0.6 сек)
+        p._botTicksLeft = ['emergency_block', 'intercept'].includes(decision.mode) ? 6 : 18;
+    }
+
+    p._botTicksLeft--;
+    p.tx         = p._targetX;
+    p.ty         = p._targetY;
+    p.isDragging = true;
+}
 
                 if (p.isDragging && p.tx !== undefined && p.ty !== undefined) {
                     p.vx = (p.tx - p.x) * 0.4;
