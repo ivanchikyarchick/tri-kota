@@ -404,45 +404,45 @@ function startGameLoop(roomId) {
 
                 p.vx = p.vx || 0; p.vy = p.vy || 0; p.vr = p.vr || 0;
 
-// Замінити блок "РОЗУМНИЙ ШІ" в ігровому циклі:
+                // ── БОТ ──────────────────────────────────────────────────
+                if (p.isBot && !state.goalTriggered) {
+                    const isTeam1  = p.team === 1;
+                    const myGoalX  = isTeam1 ? WALL_PADDING + 60 : WIDTH - WALL_PADDING - 60;
+                    const goalY    = HEIGHT / 2;
 
-if (p.isBot && !state.goalTriggered) {
-    const teammates = playerKeys
-        .filter(tid => tid !== id && state.players[tid]?.team === p.team)
-        .map(tid => state.players[tid]);
-    const enemies = playerKeys
-        .filter(eid => state.players[eid]?.team !== p.team)
-        .map(eid => state.players[eid]);
-    const enemyIds = playerKeys.filter(eid => state.players[eid]?.team !== p.team);
+                    // Оновлюємо ціль раз на 20 кадрів (~0.67 сек)
+                    if (!p._botTick) p._botTick = 0;
+                    p._botTick--;
 
-    // Ініціалізація лічильника
-    if (p._botTicksLeft === undefined) p._botTicksLeft = 0;
+                    if (p._botTick <= 0) {
+                        const puckOnOurSide      = isTeam1 ? puck.x < WIDTH * 0.5 : puck.x > WIDTH * 0.5;
+                        const puckComingToGoal   = isTeam1 ? puck.vx < -2 : puck.vx > 2;
+                        const distPuckToMyGoal   = Math.abs(puck.x - myGoalX);
 
-    const distToTarget = p._targetX !== undefined
-        ? Math.hypot(p.x - p._targetX, p.y - p._targetY)
-        : 999;
+                        if (puckComingToGoal && distPuckToMyGoal < 300) {
+                            // ЗАХИСТ: стаємо між шайбою і воротами
+                            p._tx = myGoalX + (isTeam1 ? 70 : -70);
+                            p._ty = Math.max(goalY - GOAL_HEIGHT / 2 + PLAYER_RADIUS,
+                                    Math.min(goalY + GOAL_HEIGHT / 2 - PLAYER_RADIUS, puck.y));
+                            p._botTick = 6;
+                        } else if (puckOnOurSide) {
+                            // АТАКА: йдемо до шайби з боку
+                            p._tx = puck.x + (isTeam1 ? -55 : 55);
+                            p._ty = puck.y;
+                            p._botTick = 20;
+                        } else {
+                            // ПОЗИЦІЯ: тримаємось у середині своєї половини
+                            p._tx = myGoalX + (isTeam1 ? 180 : -180);
+                            p._ty = goalY + (puck.y - goalY) * 0.4;
+                            p._botTick = 20;
+                        }
+                    }
 
-    // Перераховуємо рішення тільки якщо:
-    // — закінчились "тіки" поточної цілі, АБО
-    // — бот вже майже дійшов до неї (< 20px)
-    if (p._botTicksLeft <= 0 || distToTarget < 20) {
-        const decision   = getBotDecision(p, puck, teammates, enemies, remainingSeconds, state.score, enemyIds);
-        const adaptLevel = getAdaptiveLevel(enemyIds[0]);
-
-        p._targetX     = decision.tx + (Math.random() - 0.5) * adaptLevel.jitter;
-        p._targetY     = decision.ty + (Math.random() - 0.5) * adaptLevel.jitter;
-        p._botMode     = decision.mode;
-
-        // Термінові режими — оновлюємо частіше (6 кадрів)
-        // Спокійні режими — рідше (18 кадрів = ~0.6 сек)
-        p._botTicksLeft = ['emergency_block', 'intercept'].includes(decision.mode) ? 6 : 18;
-    }
-
-    p._botTicksLeft--;
-    p.tx         = p._targetX;
-    p.ty         = p._targetY;
-    p.isDragging = true;
-}
+                    p.tx         = p._tx;
+                    p.ty         = p._ty;
+                    p.isDragging = true;
+                }
+                // ─────────────────────────────────────────────────────────
 
                 if (p.isDragging && p.tx !== undefined && p.ty !== undefined) {
                     p.vx = (p.tx - p.x) * 0.4;
