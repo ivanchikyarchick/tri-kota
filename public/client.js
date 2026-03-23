@@ -14,14 +14,18 @@ let myTeam = null;
 const PLAYER_RADIUS = 40;
 const PUCK_RADIUS = 20;
 
+// Завантаження всіх текстур
 const images = {
     rink: new Image(), korzhik: new Image(), karamelka: new Image(),
     puck: new Image(), korGol: new Image(), carGol: new Image()
 };
 
-images.rink.src = 'assets/rink.jpg'; images.korzhik.src = 'assets/korzhik.png';
-images.karamelka.src = 'assets/karamelka.png'; images.puck.src = 'assets/puck.png';
-images.korGol.src = 'assets/kor_gol.png'; images.carGol.src = 'assets/car_gol.png';
+images.rink.src = 'assets/rink.jpg'; 
+images.korzhik.src = 'assets/korzhik.png';
+images.karamelka.src = 'assets/karamelka.png'; 
+images.puck.src = 'assets/puck.png';
+images.korGol.src = 'assets/kor_gol.png'; 
+images.carGol.src = 'assets/car_gol.png';
 
 let gameState = { players: {}, puck: { x: 600, y: 300 }, score: { team1: 0, team2: 0 } };
 let isDragging = false;
@@ -66,47 +70,102 @@ function startGame(modePlayers) {
 
 socket.on('waiting', (msg) => { statusText.innerText = msg; });
 
+// Приймаємо повний початковий стан (імена, команди, хто де стоїть)
 socket.on('matchFound', (data) => {
     currentRoom = data.roomId;
-    myTeam = data.myTeam;
+    gameState = data.state; 
+    myTeam = gameState.players[socket.id].team;
+    
     menuDiv.style.display = 'none';
     canvas.style.display = 'block';
     requestAnimationFrame(gameLoop);
 });
 
-socket.on('gameState', (serverState) => { if (currentRoom) gameState = serverState; });
+// Приймаємо ОПТИМІЗОВАНИЙ стан (тільки координати для Render.com)
+socket.on('gs', (miniState) => {
+    if (!currentRoom) return;
+    
+    gameState.puck.x = miniState.u.x;
+    gameState.puck.y = miniState.u.y;
+    gameState.score = miniState.s;
+    
+    // Оновлюємо лише координати гравців
+    for (let id in miniState.p) {
+        if (gameState.players[id]) {
+            gameState.players[id].x = miniState.p[id].x;
+            gameState.players[id].y = miniState.p[id].y;
+        }
+    }
+});
 
+// Якщо суперник вийшов, повертаємо в меню
+socket.on('playerDisconnected', () => {
+    alert('Кто-то из игроков отключился. Матч завершен.');
+    location.reload(); 
+});
+
+// Анімація голу
 socket.on('goal', (char) => {
     goalScorerChar = char;
     showGoalAnimation = true;
     goalAnimationStart = performance.now();
 });
 
-// === КЕРУВАННЯ ===
-function getMousePos(e) {
+// === КЕРУВАННЯ (МИШКА + ТАЧСКРІН) ===
+function getEventPos(e) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+    
+    let clientX = e.clientX;
+    let clientY = e.clientY;
+    
+    if (e.touches && e.touches.length > 0) {
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
+    }
+
+    return { 
+        x: (clientX - rect.left) * scaleX, 
+        y: (clientY - rect.top) * scaleY 
+    };
 }
 
-canvas.addEventListener('mousedown', (e) => {
+function handleStart(e) {
     if (!currentRoom || !myTeam || !gameState.players[socket.id]) return;
-    const mousePos = getMousePos(e);
+    const pos = getEventPos(e);
     const myPlayer = gameState.players[socket.id];
     
-    const dx = mousePos.x - myPlayer.x;
-    const dy = mousePos.y - myPlayer.y;
-    if (Math.sqrt(dx * dx + dy * dy) <= PLAYER_RADIUS) isDragging = true;
-});
+    const dx = pos.x - myPlayer.x;
+    const dy = pos.y - myPlayer.y;
+    // Збільшена зона захвату для зручності на телефонах
+    if (Math.sqrt(dx * dx + dy * dy) <= PLAYER_RADIUS * 1.5) {
+        isDragging = true;
+    }
+}
 
-window.addEventListener('mouseup', () => { isDragging = false; });
+function handleEnd() { 
+    isDragging = false; 
+}
 
-canvas.addEventListener('mousemove', (e) => {
+function handleMove(e) {
+    // Зупиняємо скрол сторінки на телефонах при грі
+    if (e.cancelable) e.preventDefault(); 
+    
     if (!isDragging || !currentRoom) return;
-    socket.emit('move', { roomId: currentRoom, position: getMousePos(e) });
-});
+    socket.emit('move', { roomId: currentRoom, position: getEventPos(e) });
+}
 
+// Прив'язуємо події
+canvas.addEventListener('mousedown', handleStart);
+window.addEventListener('mouseup', handleEnd);
+canvas.addEventListener('mousemove', handleMove);
+
+canvas.addEventListener('touchstart', handleStart, { passive: false });
+window.addEventListener('touchend', handleEnd);
+canvas.addEventListener('touchmove', handleMove, { passive: false });
+
+// === МАЛЮВАННЯ ===
 function safeDrawCircleImage(image, x, y, radius) {
     if (!image.complete || image.naturalWidth === 0) {
         ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = 'gray'; ctx.fill(); return;
@@ -115,7 +174,6 @@ function safeDrawCircleImage(image, x, y, radius) {
     ctx.drawImage(image, x - radius, y - radius, radius * 2, radius * 2); ctx.restore();
 }
 
-// === МАЛЮВАННЯ ===
 function gameLoop(timestamp) {
     if (!currentRoom) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -139,7 +197,7 @@ function gameLoop(timestamp) {
     ctx.fillStyle = 'white'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center';
     ctx.fillText(`${gameState.score.team1} : ${gameState.score.team2}`, canvas.width / 2, 50);
 
-    // Анімація голу
+    // Плавна анімація голу
     if (showGoalAnimation) {
         const elapsed = timestamp - goalAnimationStart;
         let opacity = Math.min(elapsed / 500, 0.6); 
