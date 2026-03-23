@@ -7,60 +7,52 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-
     <div id="online-counter">Онлайн: 0</div>
 
-    <!-- AUTH -->
     <div id="auth">
-        <h1>🏒 Три Кота Хоккей</h1>
+        <h1>Три Кота Хоккей</h1>
         <div class="selection">
-            <input type="text"     id="username" placeholder="Имя пользователя" autocomplete="username">
-            <input type="password" id="password" placeholder="Пароль"           autocomplete="current-password">
-            <div class="auth-buttons">
-                <button onclick="login()"    class="btn-login">Войти</button>
-                <button onclick="register()" class="btn-register">Регистрация</button>
-            </div>
+            <input type="text" id="username" placeholder="Имя пользователя"><br><br>
+            <input type="password" id="password" placeholder="Пароль"><br><br>
+            <button onclick="login()" style="border-color: #4da6ff;">Войти</button>
+            <button onclick="register()" style="border-color: #ff99cc;">Регистрация</button>
         </div>
         <p id="auth-status"></p>
     </div>
 
-    <!-- MENU -->
     <div id="menu" style="display:none;">
         <h1 id="welcome-text">Добро пожаловать!</h1>
-        <h2 id="my-elo-display">🏆 Рейтинг Эло: 1000</h2>
-
+        <h2 id="my-elo-display" style="color: #ff9900; margin-top: -10px;">🏆 Рейтинг Эло: 1000</h2>
+        
         <div class="selection">
             <h3>1. Выбери персонажа:</h3>
-            <button id="btn-korzhik"   class="char-btn active-btn" onclick="selectCharacter('korzhik')">🐱 Коржик</button>
-            <button id="btn-karamelka" class="char-btn"            onclick="selectCharacter('karamelka')">🐱 Карамелька</button>
-            <button id="btn-kompot"    class="char-btn"            onclick="selectCharacter('kompot')">🐱 Компот</button>
+            <button id="btn-korzhik" class="char-btn active-btn" onclick="selectCharacter('korzhik')">Коржик</button>
+            <button id="btn-karamelka" class="char-btn" onclick="selectCharacter('karamelka')">Карамелька</button>
+            <button id="btn-kompot" class="char-btn" onclick="selectCharacter('kompot')">Компот</button>
         </div>
-
+        
         <div class="selection">
             <h3>2. Выбери режим:</h3>
             <button id="btn-mode-1" class="mode-btn active-btn" onclick="selectMode(1)">1 на 1</button>
-            <button id="btn-mode-2" class="mode-btn"            onclick="selectMode(2)">2 на 2</button>
-            <button id="btn-mode-3" class="mode-btn"            onclick="selectMode(3)">3 на 3</button>
+            <button id="btn-mode-2" class="mode-btn" onclick="selectMode(2)">2 на 2</button>
+            <button id="btn-mode-3" class="mode-btn" onclick="selectMode(3)">3 на 3</button>
         </div>
-
+        
         <div class="action-buttons">
-            <button id="btn-start"    onclick="startMatchmaking()">▶ СТАРТ</button>
+            <button id="btn-start" onclick="startMatchmaking()">СТАРТ</button>
             <button id="btn-spectate" onclick="spectateRandomGame()">👁 Смотреть игру</button>
         </div>
     </div>
 
-    <!-- MATCHMAKING OVERLAY -->
-    <div id="matchmaking-overlay" style="display:none;">
+    <div id="matchmaking-overlay" style="display: none;">
         <div class="radar"></div>
         <h2 id="mm-text">Поиск достойного соперника...</h2>
-        <button onclick="cancelMatchmaking()" class="btn-cancel">✕ Отмена</button>
+        <button onclick="cancelMatchmaking()" style="margin-top: 30px; border-color: #ff4d4d; color: #ff4d4d; background: transparent;">Отмена</button>
     </div>
 
-    <!-- CHAT TOGGLE BUTTON -->
-    <button id="chat-toggle-btn" onclick="toggleChat()" style="display:none;" title="Скрыть/Показать чат">👁️</button>
+    <button id="chat-toggle-btn" onclick="toggleChat()" style="display: none;" title="Скрыть/Показать чат">👁️</button>
 
-    <!-- CHAT -->
-    <div id="chat-container" style="display:none;">
+    <div id="chat-container" style="display: none;">
         <div id="chat-messages"></div>
         <div id="chat-input-wrapper">
             <input type="text" id="chat-input" placeholder="Написать в чат...">
@@ -68,14 +60,12 @@
         </div>
     </div>
 
-    <!-- AFK SCREEN -->
-    <div id="afk-screen">
-        <h1>ВЫ УСНУЛИ? 😴</h1>
-        <p>Вы были неактивны 15 секунд. Теперь за вас играет БОТ.</p>
-        <button onclick="location.reload()">Выйти в меню</button>
+    <div id="afk-screen" style="display: none; position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); z-index: 3000; flex-direction: column; align-items: center; justify-content: center;">
+        <h1 style="color: #ff4d4d; font-size: 40px; text-align: center;">ВЫ УСНУЛИ? 😴</h1>
+        <p style="color: white; font-size: 20px; text-align: center; margin-bottom: 30px;">Вы были неактивны 15 секунд. Теперь за вас играет БОТ.</p>
+        <button onclick="location.reload()" style="padding: 15px 30px; font-size: 20px; background: #ff4d4d; color: white; border: none; cursor: pointer; border-radius: 10px;">Выйти в меню</button>
     </div>
 
-    <!-- CANVAS -->
     <canvas id="gameCanvas" width="1200" height="600"></canvas>
 
     <script src="/socket.io/socket.io.js"></script>
