@@ -19,7 +19,12 @@ let totalOnline = 0;
 const ipConnections = {};
 
 function initGameState() {
-    return { players: {}, puck: { x: WIDTH/2, y: HEIGHT/2, vx: 0, vy: 0 }, score: { team1: 0, team2: 0 }, goalTriggered: false };
+    return { 
+        players: {}, 
+        puck: { x: WIDTH/2, y: HEIGHT/2, vx: 0, vy: 0, lastHit: null }, // Додано lastHit
+        score: { team1: 0, team2: 0 }, 
+        goalTriggered: false 
+    };
 }
 
 function handleCollision(p1, p2, radius1, radius2, isPuck = false) {
@@ -33,7 +38,7 @@ function handleCollision(p1, p2, radius1, radius2, isPuck = false) {
             let kickForce = 18;
             p2.vx = Math.cos(angle) * kickForce; p2.vy = Math.sin(angle) * kickForce;
             p2.x = p1.x + Math.cos(angle) * minDist; p2.y = p1.y + Math.sin(angle) * minDist;
-            return true; // Сигнал: відбувся удар!
+            return true; 
         } else {
             let overlap = minDist - distance;
             p1.x -= Math.cos(angle) * (overlap / 2); p1.y -= Math.sin(angle) * (overlap / 2);
@@ -49,7 +54,7 @@ function resetAfterGoal(roomId, scorerChar) {
     io.to(roomId).emit('goal', scorerChar);
     setTimeout(() => {
         if(game && game.state) {
-            game.state.puck = { x: WIDTH/2, y: HEIGHT/2, vx: 0, vy: 0 };
+            game.state.puck = { x: WIDTH/2, y: HEIGHT/2, vx: 0, vy: 0, lastHit: null };
             game.state.goalTriggered = false;
             let t1Count = 0, t2Count = 0;
             for (let id in game.state.players) {
@@ -61,6 +66,28 @@ function resetAfterGoal(roomId, scorerChar) {
     }, 2500);
 }
 
+// === НОВА ФІЧА: МИТТЄВЕ ЕЛО ЗА ГОЛ ===
+function giveInstantElo(roomId, scoringTeam, lastHitId) {
+    const game = rooms[roomId];
+    if (!game) return;
+
+    for (let id in game.state.players) {
+        let p = game.state.players[id];
+        let dbUser = usersDb[p.username];
+        if (!dbUser || p.isBot) continue;
+
+        if (id === lastHitId && p.team === scoringTeam) {
+            // АВТОР ГОЛУ ОТРИМУЄ +25!
+            dbUser.elo += 25;
+            io.to(id).emit('eloUpdated', { elo: dbUser.elo, change: 25, reason: 'ГОЛ!' });
+        } else if (p.team === scoringTeam) {
+            // ТІММЕЙТИ ОТРИМУЮТЬ +10!
+            dbUser.elo += 10;
+            io.to(id).emit('eloUpdated', { elo: dbUser.elo, change: 10, reason: 'КОМАНДА' });
+        }
+    }
+}
+
 function updateElo(roomId, finalScore) {
     const game = rooms[roomId];
     if (!game || game.eloAwarded) return;
@@ -69,12 +96,12 @@ function updateElo(roomId, finalScore) {
     for (let id in game.state.players) {
         let p = game.state.players[id];
         let dbUser = usersDb[p.username];
-        if (!dbUser) continue;
+        if (!dbUser || p.isBot) continue;
 
         let eloChange = 0;
-        if (finalScore.team1 === finalScore.team2) eloChange = +10; 
-        else if ((p.team === 1 && finalScore.team1 > finalScore.team2) || (p.team === 2 && finalScore.team2 > finalScore.team1)) eloChange = +45; 
-        else eloChange = -15; 
+        if (finalScore.team1 === finalScore.team2) eloChange = 0; // Нічия - 0
+        else if ((p.team === 1 && finalScore.team1 > finalScore.team2) || (p.team === 2 && finalScore.team2 > finalScore.team1)) eloChange = +15; // Бонус за перемогу
+        else eloChange = -15; // Штраф за поразку
 
         dbUser.elo += eloChange;
         if (dbUser.elo < 0) dbUser.elo = 0;
@@ -102,7 +129,7 @@ function startGameLoop(roomId) {
 
             const state = game.state;
             const puck = state.puck;
-            let hit = false; // Змінна для звуку
+            let hit = false; 
 
             if (isNaN(puck.x) || isNaN(puck.y) || Math.abs(puck.x) > 3000) {
                 puck.x = WIDTH / 2; puck.y = HEIGHT / 2; puck.vx = 0; puck.vy = 0;
@@ -111,13 +138,21 @@ function startGameLoop(roomId) {
             puck.x += puck.vx; puck.y += puck.vy;
             puck.vx *= FRICTION; puck.vy *= FRICTION;
 
-            // Зіткнення з бортами
             if (puck.y - PUCK_RADIUS < WALL_PADDING) { puck.y = PUCK_RADIUS + WALL_PADDING; puck.vy *= -0.8; hit = true; } 
             else if (puck.y + PUCK_RADIUS > HEIGHT - WALL_PADDING) { puck.y = HEIGHT - PUCK_RADIUS - WALL_PADDING; puck.vy *= -0.8; hit = true; }
 
+            // ЛОГІКА ГОЛІВ
             if (puck.y > HEIGHT / 2 - GOAL_HEIGHT / 2 && puck.y < HEIGHT / 2 + GOAL_HEIGHT / 2) {
-                if (puck.x - PUCK_RADIUS < WALL_PADDING && !state.goalTriggered) { state.score.team2++; state.goalTriggered = true; resetAfterGoal(roomId, 'karamelka'); } 
-                else if (puck.x + PUCK_RADIUS > WIDTH - WALL_PADDING && !state.goalTriggered) { state.score.team1++; state.goalTriggered = true; resetAfterGoal(roomId, 'korzhik'); }
+                if (puck.x - PUCK_RADIUS < WALL_PADDING && !state.goalTriggered) { 
+                    state.score.team2++; state.goalTriggered = true; 
+                    giveInstantElo(roomId, 2, puck.lastHit); // ДАЄМО ЕЛО!
+                    resetAfterGoal(roomId, 'karamelka'); 
+                } 
+                else if (puck.x + PUCK_RADIUS > WIDTH - WALL_PADDING && !state.goalTriggered) { 
+                    state.score.team1++; state.goalTriggered = true; 
+                    giveInstantElo(roomId, 1, puck.lastHit); // ДАЄМО ЕЛО!
+                    resetAfterGoal(roomId, 'korzhik'); 
+                }
             } else {
                 if (puck.x - PUCK_RADIUS < WALL_PADDING) { puck.x = PUCK_RADIUS + WALL_PADDING; puck.vx *= -0.8; hit = true; } 
                 else if (puck.x + PUCK_RADIUS > WIDTH - WALL_PADDING) { puck.x = WIDTH - PUCK_RADIUS - WALL_PADDING; puck.vx *= -0.8; hit = true; }
@@ -140,13 +175,13 @@ function startGameLoop(roomId) {
                     p.x = Math.max(minX, Math.min(p.x, maxX)); p.y = Math.max(WALL_PADDING + PLAYER_RADIUS, Math.min(p.y, HEIGHT - WALL_PADDING - PLAYER_RADIUS));
                 }
                 
-                // Зіткнення з гравцями
+                // ТРЕКАЄМО ОСТАННІЙ УДАР ПО ШАЙБІ
                 if (handleCollision(p, puck, PLAYER_RADIUS, PUCK_RADIUS, true)) {
                     hit = true;
+                    puck.lastHit = id; 
                 }
             }
 
-            // Передаємо параметр `h` (hit) якщо був удар
             const miniState = { p: {}, u: { x: Math.round(puck.x), y: Math.round(puck.y) }, s: state.score, t: remainingSeconds, h: hit ? 1 : 0 };
             for (let id in state.players) {
                 if (state.players[id] && !isNaN(state.players[id].x)) {
@@ -167,7 +202,6 @@ io.on('connection', (socket) => {
 
     if (!ipConnections[ip]) ipConnections[ip] = 0;
     ipConnections[ip]++;
-    
     if (ipConnections[ip] > 15) { console.warn(`[АНТИ-БОТ] Заблоковано IP: ${ip}`); socket.disconnect(true); return; }
 
     totalOnline++;
