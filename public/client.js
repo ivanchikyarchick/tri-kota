@@ -104,8 +104,7 @@ function startTraining() {
 }
 
 socket.on('waiting', (msg) => { mmText.innerText = msg; });
-socket.on('matchFound', (data) => { isSpectator = false; currentRoom = data.roomId; gameState = data.state; myTeam = gameState.players[socket.id].team; mmOverlay.style.display = 'none'; menuDiv.style.display = 'none'; canvas.style.display = 'block'; chatContainer.style.display = 'flex'; if(chatToggleBtn) chatToggleBtn.style.display = 'flex'; wakeUpChat(); requestAnimationFrame(gameLoop); });
-socket.on('spectateStart', (data) => { isSpectator = true; currentRoom = data.roomId; gameState = data.state; myTeam = null; mmOverlay.style.display = 'none'; menuDiv.style.display = 'none'; canvas.style.display = 'block'; chatContainer.style.display = 'flex'; if(chatToggleBtn) chatToggleBtn.style.display = 'flex'; wakeUpChat(); requestAnimationFrame(gameLoop); alert('Вы подключились как зритель! 👁️'); });
+socket.on('matchFound', (data) => { isSpectator = false; currentRoom = data.roomId; gameState = data.state; myTeam = gameState.players[socket.id].team; if (typeof closeTrainingModal === 'function') closeTrainingModal(); mmOverlay.style.display = 'none'; menuDiv.style.display = 'none'; canvas.style.display = 'block'; chatContainer.style.display = 'flex'; if(chatToggleBtn) chatToggleBtn.style.display = 'flex'; wakeUpChat(); requestAnimationFrame(gameLoop); });
 socket.on('spectateError', (msg) => { alert(msg); });
 socket.on('afkWarning', () => { isSpectator = true; if(afkScreen) afkScreen.style.display = 'flex'; });
 
