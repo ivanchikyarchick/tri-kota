@@ -18,6 +18,9 @@ body, html {
     box-shadow: 0 4px 15px rgba(0,0,0,0.3); border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
+#btn-gonya { background: #fff9e6; color: #cc9900; border: 2px solid #ffcc00; }
+#btn-gonya:hover { background: #ffcc00; color: white; }
+
         #training-modal {
             display: none;
             position: fixed;
