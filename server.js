@@ -608,54 +608,6 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ── ТРЕНУВАННЯ З БОТОМ ───────────────────────────────────────────
-    socket.on('trainingMatch', (data) => {
-        try {
-            const roomId    = `training_${socket.id}_${Date.now()}`;
-            const gameState = initGameState();
-
-            // Гравець — команда 1
-            socket.join(roomId);
-            gameState.players[socket.id] = {
-                x: 150, y: 300,
-                char:         data.character,
-                team:         1,
-                username:     data.username,
-                ping:         0,
-                lastMoveTime: Date.now(),
-                isBot:        false,
-                isDragging:   false,
-            };
-
-            // Бот — команда 2
-            const botId = `bot_${roomId}`;
-            gameState.players[botId] = {
-                x: 1050, y: 300,
-                char:           'karamelka',
-                team:           2,
-                username:       `БОТ [${(data.difficulty || 'medium').toUpperCase()}]`,
-                ping:           0,
-                lastMoveTime:   Date.now(),
-                isBot:          true,
-                isDragging:     false,
-                botDifficulty:  data.difficulty || 'medium',
-            };
-
-            rooms[roomId] = {
-                state:      gameState,
-                players:    [socket.id],
-                endTime:    Date.now() + 180 * 1000,
-                eloAwarded: false,
-                isTraining: true,
-            };
-
-            socket.emit('matchFound', { roomId, state: gameState });
-            startGameLoop(roomId);
-        } catch (err) {
-            console.error('trainingMatch error:', err);
-        }
-    });
-
     // ── СКАСУВАННЯ ЧЕРГИ ─────────────────────────────────────────────
     socket.on('cancelMatchMatchmaking', () => {
         [1, 2, 3].forEach(mode => {
