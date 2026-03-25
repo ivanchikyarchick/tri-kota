@@ -159,6 +159,8 @@ function enterGame(roomId, state, spectator) {
     startSound.currentTime = 0;
     startSound.play().catch(() => {});
 
+    if (document.getElementById('voice-enable').checked) initiateVoiceConnections();
+    
     requestAnimationFrame(gameLoop);
 }
 
@@ -398,4 +400,156 @@ function gameLoop(timestamp) {
     floatingTexts = floatingTexts.filter(ft => ft.life > 0);
 
     requestAnimationFrame(gameLoop);
+
+    // ============================================================
+// ГОЛОСОВИЙ ЧАТ ТА VOICE CHANGER (WEBRTC + WEB AUDIO API)
+// ============================================================
+let localAudioStream = null;
+let processedAudioStream = null;
+let audioContext = null;
+let peers = {}; // З'єднання з іншими гравцями
+const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
+async function getMicrophones() {
+    const select = document.getElementById('mic-select');
+    try {
+        await navigator.mediaDevices.getUserMedia({ audio: true }); // Запит дозволу
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        select.innerHTML = mics.map(m => `<option value="${m.deviceId}">${m.label || 'Мікрофон ' + m.deviceId.substring(0,5)}</option>`).join('');
+    } catch (e) {
+        select.innerHTML = '<option value="">Помилка мікрофону / Немає дозволу</option>';
+    }
+}
+
+async function toggleVoice() {
+    if (document.getElementById('voice-enable').checked) {
+        await getMicrophones(); await startMicrophone();
+    } else {
+        stopMicrophone(); closeAllPeers();
+    }
+}
+
+async function changeMicrophone()  { if (document.getElementById('voice-enable').checked) await startMicrophone(); }
+function changeVoiceEffect() { if (document.getElementById('voice-enable').checked) startMicrophone(); }
+
+// Генератор кривої для спотворення звуку (робот/рація)
+function makeDistortionCurve(amount) {
+    let k = amount, n_samples = 44100, curve = new Float32Array(n_samples), deg = Math.PI / 180, i = 0, x;
+    for ( ; i < n_samples; ++i ) { x = i * 2 / n_samples - 1; curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) ); }
+    return curve;
+}
+
+async function startMicrophone() {
+    stopMicrophone();
+    const deviceId = document.getElementById('mic-select').value;
+    const effect = document.getElementById('voice-effect').value;
+    
+    try {
+        localAudioStream = await navigator.mediaDevices.getUserMedia({ 
+            audio: deviceId ? { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: true } : { echoCancellation: true } 
+        });
+
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(localAudioStream);
+        const destination = audioContext.createMediaStreamDestination();
+
+        // --- VOICE CHANGER ЛОГІКА ---
+        if (effect === 'robot') {
+            const distortion = audioContext.createWaveShaper();
+            distortion.curve = makeDistortionCurve(400); // Сильне спотворення
+            const biquadFilter = audioContext.createBiquadFilter();
+            biquadFilter.type = "bandpass"; biquadFilter.frequency.value = 1000;
+            source.connect(distortion); distortion.connect(biquadFilter); biquadFilter.connect(destination);
+        } else if (effect === 'echo') {
+            const delay = audioContext.createDelay();
+            delay.delayTime.value = 0.2; // Затримка 200мс
+            const feedback = audioContext.createGain();
+            feedback.gain.value = 0.5; // Сила луни
+            source.connect(delay); delay.connect(feedback); feedback.connect(delay);
+            source.connect(destination); delay.connect(destination);
+        } else if (effect === 'radio') {
+            const highpass = audioContext.createBiquadFilter(); highpass.type = "highpass"; highpass.frequency.value = 500;
+            const lowpass = audioContext.createBiquadFilter(); lowpass.type = "lowpass"; lowpass.frequency.value = 2500;
+            const distortion = audioContext.createWaveShaper(); distortion.curve = makeDistortionCurve(50);
+            source.connect(highpass); highpass.connect(lowpass); lowpass.connect(distortion); distortion.connect(destination);
+        } else {
+            source.connect(destination); // Без ефекту
+        }
+
+        processedAudioStream = destination.stream;
+        if (currentRoom) initiateVoiceConnections(); // Якщо вже в грі - телефонуємо іншим
+        
+    } catch (e) {
+        console.error('Мікрофон не запущено:', e);
+        document.getElementById('voice-enable').checked = false;
+    }
+}
+
+function stopMicrophone() {
+    if (localAudioStream) localAudioStream.getTracks().forEach(t => t.stop());
+    if (audioContext) audioContext.close();
+}
+
+function createPeer(targetSocketId) {
+    const peer = new RTCPeerConnection(rtcConfig);
+    peers[targetSocketId] = peer;
+
+    if (processedAudioStream) processedAudioStream.getTracks().forEach(track => peer.addTrack(track, processedAudioStream));
+
+    peer.onicecandidate = (event) => {
+        if (event.candidate) socket.emit('webrtc-ice', { target: targetSocketId, candidate: event.candidate });
+    };
+
+    peer.ontrack = (event) => {
+        let audioEl = document.getElementById(`audio-${targetSocketId}`);
+        if (!audioEl) {
+            audioEl = document.createElement('audio');
+            audioEl.id = `audio-${targetSocketId}`;
+            audioEl.autoplay = true;
+            document.body.appendChild(audioEl);
+        }
+        audioEl.srcObject = event.streams[0];
+    };
+    return peer;
+}
+
+function initiateVoiceConnections() {
+    for (const id in gameState.players) {
+        if (id !== socket.id && !gameState.players[id].isBot) {
+            const peer = createPeer(id);
+            peer.createOffer().then(offer => {
+                peer.setLocalDescription(offer);
+                socket.emit('webrtc-offer', { target: id, sdp: offer });
+            });
+        }
+    }
+}
+
+function closeAllPeers() {
+    for (let id in peers) {
+        peers[id].close();
+        const audioEl = document.getElementById(`audio-${id}`);
+        if (audioEl) audioEl.remove();
+    }
+    peers = {};
+}
+
+// Обробка дзвінків від інших гравців
+socket.on('webrtc-offer', async (data) => {
+    if (!document.getElementById('voice-enable').checked) return; // Якщо мікрофон вимкнено - ігноруємо
+    const peer = createPeer(data.sender);
+    await peer.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    socket.emit('webrtc-answer', { target: data.sender, sdp: answer });
+});
+
+socket.on('webrtc-answer', async (data) => {
+    if (peers[data.sender]) await peers[data.sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
+});
+
+socket.on('webrtc-ice', (data) => {
+    if (peers[data.sender]) peers[data.sender].addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.error(e));
+});
 }
