@@ -69,14 +69,12 @@ socket.on('pingTimer',   (ts)    => { socket.emit('pongTimer', ts); });
 
 // === АВТОРИЗАЦІЯ ===
 function register() {
-    // ОНОВЛЕНО: додано .trim()
     const user = document.getElementById('username').value.trim();
     const pass = document.getElementById('password').value.trim();
     if (user && pass) socket.emit('register', { username: user, password: pass });
 }
 
 function login() {
-    // ОНОВЛЕНО: додано .trim()
     const user = document.getElementById('username').value.trim();
     const pass = document.getElementById('password').value.trim();
     if (user && pass) socket.emit('login', { username: user, password: pass });
@@ -84,12 +82,11 @@ function login() {
 
 socket.on('authResult', (res) => {
     if (res.success) {
-        // ОНОВЛЕНО: збереження даних та ID
         myId = res.userId;
         myUsername = res.username; 
         myElo = res.elo;
         
-        localStorage.setItem('userId', myId); // Зберігаємо сесію
+        localStorage.setItem('userId', myId);
 
         authDiv.style.display = 'none'; 
         menuDiv.style.display = 'block';
@@ -102,13 +99,11 @@ socket.on('authResult', (res) => {
     }
 });
 
-// ДОДАНО: авто-вхід
 window.onload = () => {
     const savedId = localStorage.getItem('userId');
     if (savedId) socket.emit('autoLogin', savedId);
 };
 
-// ДОДАНО: вихід з акаунту
 function logout() {
     localStorage.removeItem('userId');
     location.reload();
@@ -155,11 +150,14 @@ function enterGame(roomId, state, spectator) {
     if (chatToggleBtn) chatToggleBtn.style.display = 'flex';
     wakeUpChat();
 
-    // Звук старту раунду
     startSound.currentTime = 0;
     startSound.play().catch(() => {});
 
-    if (document.getElementById('voice-enable').checked) initiateVoiceConnections();
+    // Підключення до голосового чату, якщо він увімкнений
+    const voiceEnableCheck = document.getElementById('voice-enable');
+    if (voiceEnableCheck && voiceEnableCheck.checked) {
+        initiateVoiceConnections();
+    }
     
     requestAnimationFrame(gameLoop);
 }
@@ -200,7 +198,6 @@ socket.on('goal', (char) => {
     showGoalAnimation  = true;
     goalAnimationStart = performance.now();
 
-    // Звук старту після голу (коли шайба скидається)
     setTimeout(() => {
         startSound.currentTime = 0;
         startSound.play().catch(() => {});
@@ -232,6 +229,7 @@ socket.on('gameOver', (finalScore) => {
     }
     setTimeout(() => {
         alert(`${msg}\nИтоговый счет: ${finalScore.team1} : ${finalScore.team2}${eloChangeMsg}`);
+        stopMicrophone(); // Вимикаємо мікрофон після завершення гри
         location.reload();
     }, 500);
 });
@@ -318,10 +316,8 @@ function gameLoop(timestamp) {
     if (!currentRoom) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Фон
     if (images.rink.complete) ctx.drawImage(images.rink, 0, 0, canvas.width, canvas.height);
 
-    // Шайба — інтерполяція
     if (gameState.puck.targetX !== undefined) {
         gameState.puck.x        += (gameState.puck.targetX - gameState.puck.x) * 0.4;
         gameState.puck.y        += (gameState.puck.targetY - gameState.puck.y) * 0.4;
@@ -329,7 +325,6 @@ function gameLoop(timestamp) {
     }
     safeDrawCircleImage(images.puck, gameState.puck.x, gameState.puck.y, PUCK_RADIUS, gameState.puck.rotation);
 
-    // Гравці
     for (const id in gameState.players) {
         const p = gameState.players[id];
         if (p.targetX !== undefined) {
@@ -341,7 +336,6 @@ function gameLoop(timestamp) {
         const img = images[p.char] || images.korzhik;
         safeDrawCircleImage(img, p.x, p.y, PLAYER_RADIUS, p.rotation);
 
-        // Ім'я та пінг
         ctx.save();
         ctx.translate(p.x, p.y);
         ctx.textAlign = 'center';
@@ -355,7 +349,6 @@ function gameLoop(timestamp) {
         ctx.restore();
     }
 
-    // Рахунок і час
     ctx.fillStyle = 'white'; ctx.font = 'bold 36px Arial'; ctx.textAlign = 'center';
     ctx.fillText(`${gameState.score.team1} : ${gameState.score.team2}`, canvas.width / 2, 50);
     const min = Math.floor(gameState.timeLeft / 60), sec = gameState.timeLeft % 60;
@@ -363,7 +356,6 @@ function gameLoop(timestamp) {
     ctx.font = 'bold 24px Arial';
     ctx.fillText(`⏱ ${min}:${sec < 10 ? '0' : ''}${sec}`, canvas.width / 2, 85);
 
-    // Анімація голу
     if (showGoalAnimation) {
         const elapsed = timestamp - goalAnimationStart;
         let opacity = Math.min(elapsed / 500, 0.6);
@@ -382,7 +374,6 @@ function gameLoop(timestamp) {
         }
     }
 
-    // Текст +ЕЛО (БЕЗПЕЧНИЙ ВАРІАНТ)
     for (let i = 0; i < floatingTexts.length; i++) {
         const ft = floatingTexts[i];
         ctx.fillStyle = `rgba(255, 215, 0, ${ft.life / 90})`;
@@ -391,34 +382,51 @@ function gameLoop(timestamp) {
         ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
         ctx.fillText(ft.text, ft.x, ft.y);
         ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
-        
         ft.y -= 1; 
         ft.life--;
     }
     
-    // Очищаємо масив від мертвих текстів ОКРЕМО від малювання
     floatingTexts = floatingTexts.filter(ft => ft.life > 0);
 
     requestAnimationFrame(gameLoop);
+} // ЦЯ ДУЖКА БУЛА ЗАГУБЛЕНА! ТЕПЕР ВОНА ТУТ.
 
-    // ============================================================
+
+// ============================================================
 // ГОЛОСОВИЙ ЧАТ ТА VOICE CHANGER (WEBRTC + WEB AUDIO API)
 // ============================================================
 let localAudioStream = null;
 let processedAudioStream = null;
 let audioContext = null;
-let peers = {}; // З'єднання з іншими гравцями
+let peers = {}; 
 const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 async function getMicrophones() {
     const select = document.getElementById('mic-select');
+    if (!select) return;
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("🚨 БРАУЗЕР БЛОКУЄ МІКРОФОН!\n\nМікрофон працює лише якщо сайт відкрито через 'localhost' або 'https://'.");
+        document.getElementById('voice-enable').checked = false;
+        select.innerHTML = '<option value="">Мікрофон заблоковано</option>';
+        return;
+    }
+
     try {
-        await navigator.mediaDevices.getUserMedia({ audio: true }); // Запит дозволу
+        await navigator.mediaDevices.getUserMedia({ audio: true }); 
         const devices = await navigator.mediaDevices.enumerateDevices();
         const mics = devices.filter(d => d.kind === 'audioinput');
-        select.innerHTML = mics.map(m => `<option value="${m.deviceId}">${m.label || 'Мікрофон ' + m.deviceId.substring(0,5)}</option>`).join('');
+        
+        if (mics.length === 0) {
+            select.innerHTML = '<option value="">Мікрофони не знайдені</option>';
+        } else {
+            select.innerHTML = mics.map(m => `<option value="${m.deviceId}">${m.label || 'Мікрофон ' + m.deviceId.substring(0,5)}</option>`).join('');
+        }
     } catch (e) {
-        select.innerHTML = '<option value="">Помилка мікрофону / Немає дозволу</option>';
+        console.error('Помилка мікрофону:', e);
+        alert('Ви не надали доступ до мікрофона, або сталася помилка: ' + e.message);
+        document.getElementById('voice-enable').checked = false;
+        select.innerHTML = '<option value="">Доступ відхилено</option>';
     }
 }
 
@@ -433,7 +441,6 @@ async function toggleVoice() {
 async function changeMicrophone()  { if (document.getElementById('voice-enable').checked) await startMicrophone(); }
 function changeVoiceEffect() { if (document.getElementById('voice-enable').checked) startMicrophone(); }
 
-// Генератор кривої для спотворення звуку (робот/рація)
 function makeDistortionCurve(amount) {
     let k = amount, n_samples = 44100, curve = new Float32Array(n_samples), deg = Math.PI / 180, i = 0, x;
     for ( ; i < n_samples; ++i ) { x = i * 2 / n_samples - 1; curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) ); }
@@ -454,18 +461,17 @@ async function startMicrophone() {
         const source = audioContext.createMediaStreamSource(localAudioStream);
         const destination = audioContext.createMediaStreamDestination();
 
-        // --- VOICE CHANGER ЛОГІКА ---
         if (effect === 'robot') {
             const distortion = audioContext.createWaveShaper();
-            distortion.curve = makeDistortionCurve(400); // Сильне спотворення
+            distortion.curve = makeDistortionCurve(400); 
             const biquadFilter = audioContext.createBiquadFilter();
             biquadFilter.type = "bandpass"; biquadFilter.frequency.value = 1000;
             source.connect(distortion); distortion.connect(biquadFilter); biquadFilter.connect(destination);
         } else if (effect === 'echo') {
             const delay = audioContext.createDelay();
-            delay.delayTime.value = 0.2; // Затримка 200мс
+            delay.delayTime.value = 0.2; 
             const feedback = audioContext.createGain();
-            feedback.gain.value = 0.5; // Сила луни
+            feedback.gain.value = 0.5; 
             source.connect(delay); delay.connect(feedback); feedback.connect(delay);
             source.connect(destination); delay.connect(destination);
         } else if (effect === 'radio') {
@@ -474,15 +480,16 @@ async function startMicrophone() {
             const distortion = audioContext.createWaveShaper(); distortion.curve = makeDistortionCurve(50);
             source.connect(highpass); highpass.connect(lowpass); lowpass.connect(distortion); distortion.connect(destination);
         } else {
-            source.connect(destination); // Без ефекту
+            source.connect(destination); 
         }
 
         processedAudioStream = destination.stream;
-        if (currentRoom) initiateVoiceConnections(); // Якщо вже в грі - телефонуємо іншим
+        if (currentRoom) initiateVoiceConnections(); 
         
     } catch (e) {
         console.error('Мікрофон не запущено:', e);
-        document.getElementById('voice-enable').checked = false;
+        const voiceCb = document.getElementById('voice-enable');
+        if(voiceCb) voiceCb.checked = false;
     }
 }
 
@@ -535,33 +542,22 @@ function closeAllPeers() {
     peers = {};
 }
 
-async function getMicrophones() {
-    const select = document.getElementById('mic-select');
-    
-    // Перевірка, чи взагалі доступний API мікрофона (захист від HTTP)
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("🚨 БРАУЗЕР БЛОКУЄ МІКРОФОН!\n\nМікрофон працює лише якщо сайт відкрито через 'localhost' або 'https://'. Якщо ви зайшли по IP (напр. 192.168.x.x), мікрофон працювати не буде.");
-        document.getElementById('voice-enable').checked = false;
-        select.innerHTML = '<option value="">Мікрофон заблоковано</option>';
-        return;
-    }
+// === WEBRTC SOCKET EVENTS ===
+socket.on('webrtc-offer', async (data) => {
+    const voiceEnableCheck = document.getElementById('voice-enable');
+    if (!voiceEnableCheck || !voiceEnableCheck.checked) return; 
 
-    try {
-        // Запит дозволу у користувача
-        await navigator.mediaDevices.getUserMedia({ audio: true }); 
-        
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const mics = devices.filter(d => d.kind === 'audioinput');
-        
-        if (mics.length === 0) {
-            select.innerHTML = '<option value="">Мікрофони не знайдені</option>';
-        } else {
-            select.innerHTML = mics.map(m => `<option value="${m.deviceId}">${m.label || 'Мікрофон ' + m.deviceId.substring(0,5)}</option>`).join('');
-        }
-    } catch (e) {
-        console.error('Помилка мікрофону:', e);
-        alert('Ви не надали доступ до мікрофона, або сталася помилка: ' + e.message);
-        document.getElementById('voice-enable').checked = false;
-        select.innerHTML = '<option value="">Доступ відхилено</option>';
-    }
-}
+    const peer = createPeer(data.sender);
+    await peer.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const answer = await peer.createAnswer();
+    await peer.setLocalDescription(answer);
+    socket.emit('webrtc-answer', { target: data.sender, sdp: answer });
+});
+
+socket.on('webrtc-answer', async (data) => {
+    if (peers[data.sender]) await peers[data.sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
+});
+
+socket.on('webrtc-ice', (data) => {
+    if (peers[data.sender]) peers[data.sender].addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.error(e));
+});
