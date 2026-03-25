@@ -9,14 +9,15 @@
 <body>
     <div id="online-counter">Онлайн: 0</div>
 
-   <div id="auth">
+    <div id="auth">
         <h1>Три Кота Хоккей</h1>
         <div class="selection">
             <input type="text" id="username" placeholder="Имя пользователя" onkeypress="if(event.key === 'Enter') login()"><br><br>
             <input type="password" id="password" placeholder="Пароль" onkeypress="if(event.key === 'Enter') login()"><br><br>
-            
-            <button onclick="login()" ontouchend="event.preventDefault(); login();" style="border-color: #4da6ff;">Войти</button>
-            <button onclick="register()" ontouchend="event.preventDefault(); register();" style="border-color: #ff99cc;">Регистрация</button>
+            <button onclick="login()" style="border-color: #4da6ff;">Войти</button>
+            <button onclick="register()" style="border-color: #ff99cc;">Регистрация</button>
+            <br><br>
+            <button id="btn-autologin" onclick="manualAutoLogin()" style="border-color: #ffd700; display: none;">Войти как сохраненный</button>
         </div>
         <p id="auth-status"></p>
     </div>
@@ -27,20 +28,17 @@
         
         <div id="voice-settings">
             <h3>🎙️ Голосовой чат</h3>
-            
             <div class="voice-control-group">
                 <label>
                     <input type="checkbox" id="voice-enable" onchange="toggleVoice()"> 
                     Включить микрофон
                 </label>
             </div>
-            
             <div class="voice-control-group">
                 <select id="mic-select" class="voice-select" onchange="changeMicrophone()">
                     <option value="">Дайте доступ к микрофону...</option>
                 </select>
             </div>
-            
             <div class="voice-control-group">
                 <label style="font-size: 13px; color: #b3d9ff; margin-bottom: 5px;">Эффект голоса:</label>
                 <select id="voice-effect" class="voice-select" onchange="changeVoiceEffect()">
