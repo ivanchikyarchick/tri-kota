@@ -26,28 +26,12 @@
         <h1 id="welcome-text">Добро пожаловать!</h1>
         <h2 id="my-elo-display" style="color: #ff9900; margin-top: -10px;">🏆 Рейтинг Эло: 1000</h2>
         
-        <div id="voice-settings">
-            <h3>🎙️ Голосовой чат</h3>
-            <div class="voice-control-group">
-                <label>
-                    <input type="checkbox" id="voice-enable" onchange="toggleVoice()"> 
-                    Включить микрофон
-                </label>
-            </div>
-            <div class="voice-control-group">
-                <select id="mic-select" class="voice-select" onchange="changeMicrophone()">
-                    <option value="">Дайте доступ к микрофону...</option>
-                </select>
-            </div>
-            <div class="voice-control-group">
-                <label style="font-size: 13px; color: #b3d9ff; margin-bottom: 5px;">Эффект голоса:</label>
-                <select id="voice-effect" class="voice-select" onchange="changeVoiceEffect()">
-                    <option value="none">Без эффекта (Обычный)</option>
-                    <option value="robot">🤖 Робот</option>
-                    <option value="echo">🗣️ Эхо</option>
-                    <option value="radio">📻 Старая рация</option>
-                </select>
-            </div>
+        <div id="voice-settings" style="text-align: center; margin-top: 15px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);">
+            <h3 style="margin-top: 0;">📻 Рация (Голосовой чат)</h3>
+            <button id="btn-enable-mic" onclick="initWalkieTalkie()" style="border-color: #4da6ff; margin-bottom: 10px; font-size: 14px; padding: 10px;">
+                🎤 Разрешить микрофон
+            </button>
+            <p id="mic-status" style="font-size: 13px; color: #b3d9ff; margin: 0;">Микрофон не активирован</p>
         </div>
         
         <div class="selection">
@@ -92,6 +76,12 @@
         <p style="color: white; font-size: 20px; text-align: center; margin-bottom: 30px;">Вы были неактивны 15 секунд. Теперь за вас играет БОТ.</p>
         <button onclick="location.reload()" style="padding: 15px 30px; font-size: 20px; background: #ff4d4d; color: white; border: none; cursor: pointer; border-radius: 10px;">Выйти в меню</button>
     </div>
+
+    <button id="ptt-btn" style="display: none; position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); padding: 15px 30px; font-size: 18px; font-weight: bold; background: rgba(0,0,0,0.7); color: white; border: 2px solid #4da6ff; border-radius: 25px; z-index: 1000; user-select: none; -webkit-user-select: none;" 
+    onmousedown="startRecording()" onmouseup="stopRecording()" 
+    ontouchstart="startRecording(); event.preventDefault();" ontouchend="stopRecording(); event.preventDefault();">
+        🎙️ Удерживай (или жми 'V')
+    </button>
 
     <canvas id="gameCanvas" width="1200" height="600"></canvas>
 
