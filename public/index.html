@@ -23,33 +23,33 @@
     <div id="menu" style="display:none;">
         <h1 id="welcome-text">Добро пожаловать!</h1>
         <h2 id="my-elo-display" style="color: #ff9900; margin-top: -10px;">🏆 Рейтинг Эло: 1000</h2>
-        <div id="voice-settings" style="margin-top: 20px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);">
-<div id="voice-settings">
-    <h3>🎙️ Голосовой чат</h3>
-    
-    <div class="voice-control-group">
-        <label>
-            <input type="checkbox" id="voice-enable" onchange="toggleVoice()"> 
-            Включить микрофон
-        </label>
-    </div>
-    
-    <div class="voice-control-group">
-        <select id="mic-select" class="voice-select" onchange="changeMicrophone()">
-            <option value="">Дайте доступ к микрофону...</option>
-        </select>
-    </div>
-    
-    <div class="voice-control-group">
-        <label style="font-size: 13px; color: #b3d9ff; margin-bottom: 5px;">Ефект голосу:</label>
-        <select id="voice-effect" class="voice-select" onchange="changeVoiceEffect()">
-            <option value="none">Без ефекта</option>
-            <option value="robot">🤖 Робот</option>
-            <option value="echo">🗣️ Ехо</option>
-            <option value="radio">📻 Старая рация</option>
-        </select>
-    </div>
-</div>
+        
+        <div id="voice-settings">
+            <h3>🎙️ Голосовой чат</h3>
+            
+            <div class="voice-control-group">
+                <label>
+                    <input type="checkbox" id="voice-enable" onchange="toggleVoice()"> 
+                    Включить микрофон
+                </label>
+            </div>
+            
+            <div class="voice-control-group">
+                <select id="mic-select" class="voice-select" onchange="changeMicrophone()">
+                    <option value="">Дайте доступ к микрофону...</option>
+                </select>
+            </div>
+            
+            <div class="voice-control-group">
+                <label style="font-size: 13px; color: #b3d9ff; margin-bottom: 5px;">Эффект голоса:</label>
+                <select id="voice-effect" class="voice-select" onchange="changeVoiceEffect()">
+                    <option value="none">Без эффекта (Обычный)</option>
+                    <option value="robot">🤖 Робот</option>
+                    <option value="echo">🗣️ Эхо</option>
+                    <option value="radio">📻 Старая рация</option>
+                </select>
+            </div>
+        </div>
         
         <div class="selection">
             <h3>1. Выбери персонажа:</h3>
