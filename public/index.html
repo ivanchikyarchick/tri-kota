@@ -1,4 +1,4 @@
-ф<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
@@ -26,22 +26,13 @@
         <h1 id="welcome-text">Добро пожаловать!</h1>
         <h2 id="my-elo-display" style="color: #ff9900; margin-top: -10px;">🏆 Рейтинг Эло: 1000</h2>
         
-      <div id="voice-settings" style="text-align: center; margin-top: 15px; background: rgba(0, 51, 102, 0.7); padding: 15px; border-radius: 12px; border: 2px solid #4da6ff; box-shadow: 0 0 15px rgba(77, 166, 255, 0.4);">
-    <h3 style="margin-top: 0; color: #ffffff; text-shadow: 1px 1px 2px black;">📻 Рация (Голосовой чат)</h3>
-    <button id="btn-enable-mic" onclick="initWalkieTalkie()" style="background: linear-gradient(to bottom, #1a75ff, #005ce6); border: 1px solid #99c2ff; color: #ffffff; margin-bottom: 10px; font-size: 15px; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; text-shadow: 1px 1px 1px black; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
-        🎤 Разрешить микрофон
-    </button>
-    <p id="mic-status" style="font-size: 14px; color: #ffffff; margin: 0; font-weight: bold;">Микрофон не активирован</p>
-    
-    <!-- Додаткові елементи для pitch shift -->
-    <div id="pitch-control" style="margin-top: 12px; display: none;">
-        <label style="color: #fff; font-size: 14px;">🎛️ Pitch shift (полутонов):</label>
-        <input type="range" id="pitch-slider" min="-12" max="12" value="0" step="1" style="width: 80%; margin: 5px 0;">
-        <span id="pitch-value" style="color: #ffd966; font-weight: bold;">0</span>
-        <button id="pitch-reset" style="background: none; border: 1px solid #ffd966; color: #ffd966; padding: 2px 8px; border-radius: 12px; margin-left: 5px; cursor: pointer;">↺</button>
-        <p style="font-size: 11px; color: #ccc; margin: 5px 0 0;">(эффект может немного изменить скорость речи)</p>
-    </div>
-</div>
+        <div id="voice-settings" style="text-align: center; margin-top: 15px; background: rgba(0, 51, 102, 0.7); padding: 15px; border-radius: 12px; border: 2px solid #4da6ff; box-shadow: 0 0 15px rgba(77, 166, 255, 0.4);">
+            <h3 style="margin-top: 0; color: #ffffff; text-shadow: 1px 1px 2px black;">📻 Рация (Голосовой чат)</h3>
+            <button id="btn-enable-mic" onclick="initWalkieTalkie()" style="background: linear-gradient(to bottom, #1a75ff, #005ce6); border: 1px solid #99c2ff; color: #ffffff; margin-bottom: 10px; font-size: 15px; padding: 10px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; text-shadow: 1px 1px 1px black; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+                🎤 Разрешить микрофон
+            </button>
+            <p id="mic-status" style="font-size: 14px; color: #ffffff; margin: 0; font-weight: bold;">Микрофон не активирован</p>
+        </div>
         
         <div class="selection">
             <h3>1. Выбери персонажа:</h3>
