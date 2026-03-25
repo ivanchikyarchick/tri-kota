@@ -12,12 +12,12 @@ const mmText        = document.getElementById('mm-text');
 const eloDisplay    = document.getElementById('my-elo-display');
 const afkScreen     = document.getElementById('afk-screen');
 
-// ДОДАНО: myId
 let myId;
 let myUsername = '', myElo = 1000, myCharacter = 'korzhik', mySelectedMode = 1,
     currentRoom = null, myTeam = null, isSpectator = false;
 
 const PLAYER_RADIUS = 40, PUCK_RADIUS = 20, WALL_PADDING = 25;
+const LERP_SPEED = 0.35; // Швидкість згладжування рухів
 
 // === ЗОБРАЖЕННЯ ===
 const images = {
@@ -69,14 +69,12 @@ socket.on('pingTimer',   (ts)    => { socket.emit('pongTimer', ts); });
 
 // === АВТОРИЗАЦІЯ ===
 function register() {
-    // ОНОВЛЕНО: додано .trim()
     const user = document.getElementById('username').value.trim();
     const pass = document.getElementById('password').value.trim();
     if (user && pass) socket.emit('register', { username: user, password: pass });
 }
 
 function login() {
-    // ОНОВЛЕНО: додано .trim()
     const user = document.getElementById('username').value.trim();
     const pass = document.getElementById('password').value.trim();
     if (user && pass) socket.emit('login', { username: user, password: pass });
@@ -84,12 +82,11 @@ function login() {
 
 socket.on('authResult', (res) => {
     if (res.success) {
-        // ОНОВЛЕНО: збереження даних та ID
         myId = res.userId;
         myUsername = res.username; 
         myElo = res.elo;
         
-        localStorage.setItem('userId', myId); // Зберігаємо сесію
+        localStorage.setItem('userId', myId); 
 
         authDiv.style.display = 'none'; 
         menuDiv.style.display = 'block';
@@ -102,13 +99,11 @@ socket.on('authResult', (res) => {
     }
 });
 
-// ДОДАНО: авто-вхід
 window.onload = () => {
     const savedId = localStorage.getItem('userId');
     if (savedId) socket.emit('autoLogin', savedId);
 };
 
-// ДОДАНО: вихід з акаунту
 function logout() {
     localStorage.removeItem('userId');
     location.reload();
@@ -155,7 +150,6 @@ function enterGame(roomId, state, spectator) {
     if (chatToggleBtn) chatToggleBtn.style.display = 'flex';
     wakeUpChat();
 
-    // Звук старту раунду
     startSound.currentTime = 0;
     startSound.play().catch(() => {});
 
@@ -194,11 +188,10 @@ socket.on('gs', (miniState) => {
 
 // === ГОЛ ===
 socket.on('goal', (char) => {
-    goalScorerChar     = char;
+    goalScorerChar     = char; // Тепер сервер передає правильного персонажа
     showGoalAnimation  = true;
     goalAnimationStart = performance.now();
 
-    // Звук старту після голу (коли шайба скидається)
     setTimeout(() => {
         startSound.currentTime = 0;
         startSound.play().catch(() => {});
@@ -319,21 +312,33 @@ function gameLoop(timestamp) {
     // Фон
     if (images.rink.complete) ctx.drawImage(images.rink, 0, 0, canvas.width, canvas.height);
 
-    // Шайба — інтерполяція
+    // Шайба — покращена інтерполяція з перевіркою телепорту
     if (gameState.puck.targetX !== undefined) {
-        gameState.puck.x        += (gameState.puck.targetX - gameState.puck.x) * 0.4;
-        gameState.puck.y        += (gameState.puck.targetY - gameState.puck.y) * 0.4;
-        gameState.puck.rotation += (gameState.puck.targetR - (gameState.puck.rotation || 0)) * 0.4;
+        const dist = Math.hypot(gameState.puck.targetX - gameState.puck.x, gameState.puck.targetY - gameState.puck.y);
+        if (dist > 150) { // Якщо відкинуло далеко (наприклад, після голу), переміщуємо миттєво
+            gameState.puck.x = gameState.puck.targetX;
+            gameState.puck.y = gameState.puck.targetY;
+        } else { // Плавно підтягуємо
+            gameState.puck.x += (gameState.puck.targetX - gameState.puck.x) * LERP_SPEED;
+            gameState.puck.y += (gameState.puck.targetY - gameState.puck.y) * LERP_SPEED;
+        }
+        gameState.puck.rotation += (gameState.puck.targetR - (gameState.puck.rotation || 0)) * LERP_SPEED;
     }
     safeDrawCircleImage(images.puck, gameState.puck.x, gameState.puck.y, PUCK_RADIUS, gameState.puck.rotation);
 
-    // Гравці
+    // Гравці — покращена інтерполяція з перевіркою телепорту
     for (const id in gameState.players) {
         const p = gameState.players[id];
         if (p.targetX !== undefined) {
-            p.x        += (p.targetX - p.x) * 0.4;
-            p.y        += (p.targetY - p.y) * 0.4;
-            p.rotation += (p.targetR - (p.rotation || 0)) * 0.4;
+            const dist = Math.hypot(p.targetX - p.x, p.targetY - p.y);
+            if (dist > 150) {
+                p.x = p.targetX;
+                p.y = p.targetY;
+            } else {
+                p.x += (p.targetX - p.x) * LERP_SPEED;
+                p.y += (p.targetY - p.y) * LERP_SPEED;
+            }
+            p.rotation += (p.targetR - (p.rotation || 0)) * LERP_SPEED;
         }
 
         const img = images[p.char] || images.korzhik;
