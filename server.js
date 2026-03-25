@@ -341,16 +341,18 @@ function startGameLoop(roomId) {
             // --- НОВА ЛОГІКА КОЛІЗІЙ ШАЙБИ З АРЕНОЮ ТА КУТАМИ ---
             const inGoalZone = puck.y > HEIGHT / 2 - GOAL_HEIGHT / 2 && puck.y < HEIGHT / 2 + GOAL_HEIGHT / 2;
             
-            if (inGoalZone) {
+           if (inGoalZone) {
                 // Логіка гола
                 if (puck.x < LEFT_BOUND && !state.goalTriggered) {
                     state.score.team2++; state.goalTriggered = true;
                     giveInstantElo(roomId, 2, puck.lastHit);
-                    resetAfterGoal(roomId, 'karamelka');
+                    const scorerChar = (puck.lastHit && state.players[puck.lastHit]) ? state.players[puck.lastHit].char : 'karamelka';
+                    resetAfterGoal(roomId, scorerChar);
                 } else if (puck.x > RIGHT_BOUND && !state.goalTriggered) {
                     state.score.team1++; state.goalTriggered = true;
                     giveInstantElo(roomId, 1, puck.lastHit);
-                    resetAfterGoal(roomId, 'korzhik');
+                    const scorerChar = (puck.lastHit && state.players[puck.lastHit]) ? state.players[puck.lastHit].char : 'korzhik';
+                    resetAfterGoal(roomId, scorerChar);
                 }
             } else {
                 // 1. Прямі стіни
