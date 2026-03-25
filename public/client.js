@@ -12,14 +12,15 @@ const mmText        = document.getElementById('mm-text');
 const eloDisplay    = document.getElementById('my-elo-display');
 const afkScreen     = document.getElementById('afk-screen');
 
-// ДОДАНО: myId
 let myId;
 let myUsername = '', myElo = 1000, myCharacter = 'korzhik', mySelectedMode = 1,
     currentRoom = null, myTeam = null, isSpectator = false;
 
+const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+const myDeviceIcon = isMobileDevice ? '📱' : '💻';
+
 const PLAYER_RADIUS = 40, PUCK_RADIUS = 20, WALL_PADDING = 25;
 
-// === ЗОБРАЖЕННЯ ===
 const images = {
     rink: new Image(), puck: new Image(),
     korzhik: new Image(), karamelka: new Image(), kompot: new Image(), gonya: new Image(),
@@ -36,7 +37,6 @@ images.goal_karamelka.src= 'assets/car_gol.png';
 images.goal_kompot.src   = 'assets/kom_gol.png';
 images.goal_gonya.src    = 'assets/gon_gol.png';
 
-// === ЗВУКИ ===
 const hitSounds  = [new Audio('assets/shay1.mp3'), new Audio('assets/shay2.mp3')];
 const startSound = new Audio('assets/start.mp3');
 
@@ -50,12 +50,10 @@ const charColors = {
 let gameState = { players: {}, puck: { x: 600, y: 300, rotation: 0 }, score: { team1: 0, team2: 0 }, timeLeft: 180 };
 let isDragging = false, showGoalAnimation = false, goalScorerChar = null, goalAnimationStart = 0, floatingTexts = [];
 
-// === ЗАХИСТ ВІД СКРОЛУ (МОБІЛЬНІ) ===
 document.addEventListener('touchmove', function(e) {
     if (e.target.tagName !== 'INPUT') e.preventDefault();
 }, { passive: false });
 
-// === ПОВНОЕКРАННИЙ РЕЖИМ ===
 function enableFullscreen() {
     const elem = document.documentElement;
     if      (elem.requestFullscreen)       elem.requestFullscreen();
@@ -63,11 +61,9 @@ function enableFullscreen() {
     else if (elem.msRequestFullscreen)     elem.msRequestFullscreen();
 }
 
-// === ОНЛАЙН / PING ===
 socket.on('onlineCount', (count) => { document.getElementById('online-counter').innerText = `Онлайн: ${count}`; });
 socket.on('pingTimer',   (ts)    => { socket.emit('pongTimer', ts); });
 
-// === АВТОРИЗАЦІЯ ===
 function register() {
     const user = document.getElementById('username').value.trim();
     const pass = document.getElementById('password').value.trim();
@@ -80,17 +76,27 @@ function login() {
     if (user && pass) socket.emit('login', { username: user, password: pass });
 }
 
+function manualAutoLogin() {
+    const savedId = localStorage.getItem('userId');
+    if (savedId) socket.emit('autoLogin', savedId);
+}
+
+window.onload = () => {
+    const savedId = localStorage.getItem('userId');
+    if (savedId) {
+        const autoBtn = document.getElementById('btn-autologin');
+        if(autoBtn) autoBtn.style.display = 'inline-block';
+    }
+};
+
 socket.on('authResult', (res) => {
     if (res.success) {
         myId = res.userId;
         myUsername = res.username; 
         myElo = res.elo;
-        
         localStorage.setItem('userId', myId);
-
         authDiv.style.display = 'none'; 
         menuDiv.style.display = 'block';
-        
         document.getElementById('welcome-text').innerText = `Привет, ${myUsername}!`;
         if (eloDisplay) eloDisplay.innerText = `🏆 Рейтинг Эло: ${myElo}`;
     } else {
@@ -99,17 +105,11 @@ socket.on('authResult', (res) => {
     }
 });
 
-window.onload = () => {
-    const savedId = localStorage.getItem('userId');
-    if (savedId) socket.emit('autoLogin', savedId);
-};
-
 function logout() {
     localStorage.removeItem('userId');
     location.reload();
 }
 
-// === ВИБІР ПЕРСОНАЖА / РЕЖИМУ ===
 function selectCharacter(char) {
     myCharacter = char;
     document.querySelectorAll('.char-btn').forEach(b => b.classList.remove('active-btn'));
@@ -121,12 +121,11 @@ function selectMode(mode) {
     document.getElementById(`btn-mode-${mode}`).classList.add('active-btn');
 }
 
-// === МАТЧМЕЙКІНГ ===
 function startMatchmaking() {
     enableFullscreen();
     mmOverlay.style.display = 'flex';
     mmText.innerText = `Ищем игру ${mySelectedMode} на ${mySelectedMode}...`;
-    socket.emit('findMatch', { character: myCharacter, username: myUsername, mode: mySelectedMode });
+    socket.emit('findMatch', { character: myCharacter, username: myUsername, mode: mySelectedMode, device: myDeviceIcon });
 }
 function cancelMatchmaking() {
     socket.emit('cancelMatchMatchmaking');
@@ -137,7 +136,6 @@ function spectateRandomGame() {
     socket.emit('spectateRandom');
 }
 
-// === ПОЧАТОК ГРИ ===
 function enterGame(roomId, state, spectator) {
     isSpectator = spectator;
     currentRoom = roomId;
@@ -153,7 +151,6 @@ function enterGame(roomId, state, spectator) {
     startSound.currentTime = 0;
     startSound.play().catch(() => {});
 
-    // Підключення до голосового чату, якщо він увімкнений
     const voiceEnableCheck = document.getElementById('voice-enable');
     if (voiceEnableCheck && voiceEnableCheck.checked) {
         initiateVoiceConnections();
@@ -168,7 +165,6 @@ socket.on('spectateStart',(data) => { enterGame(data.roomId, data.state, true); 
 socket.on('spectateError',(msg)  => { alert(msg); });
 socket.on('afkWarning',   ()     => { isSpectator = true; if (afkScreen) afkScreen.style.display = 'flex'; });
 
-// === ОНОВЛЕННЯ СТАНУ ГРИ ===
 socket.on('gs', (miniState) => {
     if (!currentRoom) return;
     gameState.puck.targetX = miniState.u.x;
@@ -184,6 +180,7 @@ socket.on('gs', (miniState) => {
         gameState.players[id].targetR = miniState.p[id].r;
         gameState.players[id].ping    = miniState.p[id].ping;
         gameState.players[id].isBot   = miniState.p[id].isBot;
+        gameState.players[id].device  = miniState.p[id].d; 
     }
 
     if (miniState.h === 1) {
@@ -192,19 +189,13 @@ socket.on('gs', (miniState) => {
     }
 });
 
-// === ГОЛ ===
 socket.on('goal', (char) => {
     goalScorerChar     = char;
     showGoalAnimation  = true;
     goalAnimationStart = performance.now();
-
-    setTimeout(() => {
-        startSound.currentTime = 0;
-        startSound.play().catch(() => {});
-    }, 2500);
+    setTimeout(() => { startSound.currentTime = 0; startSound.play().catch(() => {}); }, 2500);
 });
 
-// === ЕЛО ===
 let eloChangeMsg = '';
 socket.on('eloUpdated', (data) => {
     myElo = data.elo;
@@ -213,11 +204,9 @@ socket.on('eloUpdated', (data) => {
         const p = gameState.players[socket.id];
         floatingTexts.push({ x: p.x, y: p.y - 60, text: `+${data.change} ЭЛО!`, life: 90 });
     }
-    if (data.change !== 25 && data.change !== 10)
-        eloChangeMsg = `\nЭло за матч: ${data.change > 0 ? '+' : ''}${data.change} (Всего: ${myElo})`;
+    if (data.change !== 25 && data.change !== 10) eloChangeMsg = `\nЭло за матч: ${data.change > 0 ? '+' : ''}${data.change} (Всего: ${myElo})`;
 });
 
-// === КІНЕЦЬ МАТЧУ ===
 socket.on('gameOver', (finalScore) => {
     let msg = 'Матч окончен!';
     if (!isSpectator && afkScreen.style.display !== 'flex') {
@@ -229,12 +218,11 @@ socket.on('gameOver', (finalScore) => {
     }
     setTimeout(() => {
         alert(`${msg}\nИтоговый счет: ${finalScore.team1} : ${finalScore.team2}${eloChangeMsg}`);
-        stopMicrophone(); // Вимикаємо мікрофон після завершення гри
+        stopMicrophone(); 
         location.reload();
     }, 500);
 });
 
-// === ЧАТ ===
 let chatTimeout;
 function toggleChat() {
     if (chatContainer.style.display === 'none') {
@@ -249,8 +237,7 @@ function wakeUpChat() {
     if (chatContainer.style.display === 'none') return;
     chatContainer.style.opacity = '1'; clearTimeout(chatTimeout);
     chatTimeout = setTimeout(() => {
-        if (document.activeElement !== document.getElementById('chat-input'))
-            chatContainer.style.opacity = '0.3';
+        if (document.activeElement !== document.getElementById('chat-input')) chatContainer.style.opacity = '0.3';
     }, 4000);
 }
 document.getElementById('chat-input').addEventListener('focus', () => { chatContainer.style.opacity = '1'; clearTimeout(chatTimeout); });
@@ -271,7 +258,6 @@ socket.on('chatMessage', (data) => {
     msgs.scrollTop = msgs.scrollHeight;
 });
 
-// === ВВЕДЕННЯ (МИШКА / ТАЧ) ===
 function getEventPos(e) {
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width, scaleY = canvas.height / rect.height;
@@ -301,7 +287,6 @@ canvas.addEventListener('touchstart', handleStart, { passive: false });
 window.addEventListener('touchend',   handleEnd);
 canvas.addEventListener('touchmove',  handleMove,  { passive: false });
 
-// === МАЛЮВАННЯ ===
 function safeDrawCircleImage(image, x, y, radius, rotation = 0) {
     if (!image.complete || image.naturalWidth === 0) {
         ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fillStyle = 'gray'; ctx.fill(); return;
@@ -341,7 +326,10 @@ function gameLoop(timestamp) {
         ctx.textAlign = 'center';
         ctx.fillStyle = (id === socket.id && !isSpectator) ? '#ffd700' : 'white';
         ctx.font = '14px Arial';
-        ctx.fillText(p.isBot ? `[BOT] ${p.username}` : p.username, 0, -PLAYER_RADIUS - 15);
+        
+        const devIcon = p.device || '💻';
+        ctx.fillText(p.isBot ? `[BOT] ${p.username}` : `${devIcon} ${p.username}`, 0, -PLAYER_RADIUS - 15);
+        
         const ping = p.ping || 0;
         ctx.fillStyle = ping > 150 ? '#ff4d4d' : (ping > 80 ? '#ffd633' : '#00ff00');
         ctx.font = 'bold 12px Arial';
@@ -389,11 +377,10 @@ function gameLoop(timestamp) {
     floatingTexts = floatingTexts.filter(ft => ft.life > 0);
 
     requestAnimationFrame(gameLoop);
-} // ЦЯ ДУЖКА БУЛА ЗАГУБЛЕНА! ТЕПЕР ВОНА ТУТ.
-
+}
 
 // ============================================================
-// ГОЛОСОВИЙ ЧАТ ТА VOICE CHANGER (WEBRTC + WEB AUDIO API)
+// ГОЛОСОВИЙ ЧАТ ТА VOICE CHANGER
 // ============================================================
 let localAudioStream = null;
 let processedAudioStream = null;
@@ -514,9 +501,16 @@ function createPeer(targetSocketId) {
             audioEl = document.createElement('audio');
             audioEl.id = `audio-${targetSocketId}`;
             audioEl.autoplay = true;
+            audioEl.playsInline = true; // Важливо для iOS!
             document.body.appendChild(audioEl);
         }
         audioEl.srcObject = event.streams[0];
+        
+        // Примусовий запуск, щоб обійти блокування браузера
+        let playPromise = audioEl.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => console.warn("Аудіо заблоковано браузером:", error));
+        }
     };
     return peer;
 }
@@ -542,7 +536,6 @@ function closeAllPeers() {
     peers = {};
 }
 
-// === WEBRTC SOCKET EVENTS ===
 socket.on('webrtc-offer', async (data) => {
     const voiceEnableCheck = document.getElementById('voice-enable');
     if (!voiceEnableCheck || !voiceEnableCheck.checked) return; 
