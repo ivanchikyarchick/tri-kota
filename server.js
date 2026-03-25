@@ -17,7 +17,7 @@ const PLAYER_RADIUS = 40;
 const PUCK_RADIUS   = 20;
 const FRICTION      = 0.985;
 const GOAL_HEIGHT   = 150;
-const WALL_PADDING  = 25;
+const WALL_PADDING  = 0;
 const MAX_PUCK_SPEED = 60;
 
 // ============================================================
