@@ -535,21 +535,33 @@ function closeAllPeers() {
     peers = {};
 }
 
-// Обробка дзвінків від інших гравців
-socket.on('webrtc-offer', async (data) => {
-    if (!document.getElementById('voice-enable').checked) return; // Якщо мікрофон вимкнено - ігноруємо
-    const peer = createPeer(data.sender);
-    await peer.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    socket.emit('webrtc-answer', { target: data.sender, sdp: answer });
-});
+async function getMicrophones() {
+    const select = document.getElementById('mic-select');
+    
+    // Перевірка, чи взагалі доступний API мікрофона (захист від HTTP)
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert("🚨 БРАУЗЕР БЛОКУЄ МІКРОФОН!\n\nМікрофон працює лише якщо сайт відкрито через 'localhost' або 'https://'. Якщо ви зайшли по IP (напр. 192.168.x.x), мікрофон працювати не буде.");
+        document.getElementById('voice-enable').checked = false;
+        select.innerHTML = '<option value="">Мікрофон заблоковано</option>';
+        return;
+    }
 
-socket.on('webrtc-answer', async (data) => {
-    if (peers[data.sender]) await peers[data.sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
-});
-
-socket.on('webrtc-ice', (data) => {
-    if (peers[data.sender]) peers[data.sender].addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.error(e));
-});
+    try {
+        // Запит дозволу у користувача
+        await navigator.mediaDevices.getUserMedia({ audio: true }); 
+        
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const mics = devices.filter(d => d.kind === 'audioinput');
+        
+        if (mics.length === 0) {
+            select.innerHTML = '<option value="">Мікрофони не знайдені</option>';
+        } else {
+            select.innerHTML = mics.map(m => `<option value="${m.deviceId}">${m.label || 'Мікрофон ' + m.deviceId.substring(0,5)}</option>`).join('');
+        }
+    } catch (e) {
+        console.error('Помилка мікрофону:', e);
+        alert('Ви не надали доступ до мікрофона, або сталася помилка: ' + e.message);
+        document.getElementById('voice-enable').checked = false;
+        select.innerHTML = '<option value="">Доступ відхилено</option>';
+    }
 }
