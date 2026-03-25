@@ -34,14 +34,26 @@ const startSound = new Audio('assets/start.mp3');
 
 // === РОЗБЛОКУВАННЯ ЗВУКУ (Для всіх пристроїв) ===
 let audioUnlocked = false;
+let audioCtx = null; // Web Audio API контекст для голосу
+
+function initAudioContext() {
+    if (audioCtx) return;
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Відтворимо порожній звук, щоб контекст став активним
+    const silent = audioCtx.createBufferSource();
+    silent.buffer = audioCtx.createBuffer(1, 1, 22050);
+    silent.connect(audioCtx.destination);
+    silent.start();
+}
+
 const unlockAudio = function() {
     if (!audioUnlocked) {
         startSound.play().then(() => { startSound.pause(); startSound.currentTime = 0; }).catch(() => {});
         hitSounds.forEach(snd => { snd.play().then(() => { snd.pause(); snd.currentTime = 0; }).catch(() => {}); });
-        const vp = document.getElementById('voice-player');
-        if (vp) { vp.play().then(() => { vp.pause(); vp.currentTime = 0; }).catch(() => {}); }
+        initAudioContext(); // ініціалізуємо AudioContext
         audioUnlocked = true;
-        document.removeEventListener('touchstart', unlockAudio); document.removeEventListener('mousedown', unlockAudio);
+        document.removeEventListener('touchstart', unlockAudio);
+        document.removeEventListener('mousedown', unlockAudio);
     }
 };
 document.addEventListener('touchstart', unlockAudio, { passive: true });
@@ -221,7 +233,7 @@ function gameLoop(timestamp) {
     floatingTexts = floatingTexts.filter(ft => ft.life > 0); requestAnimationFrame(gameLoop);
 }
 
-// === РАЦІЯ (ARRAY BUFFER) ===
+// === РАЦІЯ (ARRAY BUFFER + Web Audio) ===
 let mediaRecorder = null, audioChunks = [], isRecording = false, recorderMimeType = '';
 
 async function initWalkieTalkie() {
@@ -234,7 +246,7 @@ async function initWalkieTalkie() {
         mediaRecorder.onstop = async () => {
             if (audioChunks.length === 0 || !currentRoom) return;
             const audioBlob = new Blob(audioChunks, { type: recorderMimeType });
-            const arrayBuffer = await audioBlob.arrayBuffer(); // Надійна передача
+            const arrayBuffer = await audioBlob.arrayBuffer();
             socket.emit('voice-message', { roomId: currentRoom, sender: myUsername, audioBlob: arrayBuffer, mimeType: recorderMimeType });
             audioChunks = []; 
         };
@@ -242,6 +254,8 @@ async function initWalkieTalkie() {
         document.getElementById('btn-enable-mic').style.display = 'none';
         document.getElementById('mic-status').innerText = "✅ Микрофон готов! В игре жми 'V'";
         document.getElementById('mic-status').style.color = "#4dff4d";
+        
+        initAudioContext(); // переконуємось, що контекст ініціалізовано
     } catch (err) {
         document.getElementById('mic-status').innerText = "❌ Доступ запрещен или нет микрофона";
         document.getElementById('mic-status').style.color = "#ff4d4d";
@@ -263,12 +277,20 @@ function stopRecording() {
 document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'v' && !e.repeat && currentRoom) startRecording(); });
 document.addEventListener('keyup', (e) => { if (e.key.toLowerCase() === 'v' && currentRoom) stopRecording(); });
 
+// Оновлений обробник голосових повідомлень (Web Audio)
 socket.on('voice-message', (data) => {
     try {
-        floatingTexts.push({ x: WIDTH/2, y: 150, text: `🔊 Говорит: ${data.sender}`, life: 120 });
-        const blob = new Blob([data.audioBlob], { type: data.mimeType });
-        const url = URL.createObjectURL(blob);
-        const voicePlayer = document.getElementById('voice-player');
-        if (voicePlayer) { voicePlayer.src = url; safePlaySound(voicePlayer); }
-    } catch (e) {}
+        if (!audioCtx) return;
+        const arrayBuffer = data.audioBlob;
+        audioCtx.decodeAudioData(arrayBuffer, (buffer) => {
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(audioCtx.destination);
+            source.start(0);
+        }, (err) => {
+            console.error('Помилка декодування аудіо:', err);
+        });
+    } catch (e) {
+        console.error('Помилка відтворення голосу:', e);
+    }
 });
