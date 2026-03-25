@@ -321,9 +321,9 @@ function gameLoop(timestamp) {
 
     // Шайба — інтерполяція
     if (gameState.puck.targetX !== undefined) {
-        gameState.puck.x        += (gameState.puck.targetX - gameState.puck.x) * 0.25;
-        gameState.puck.y        += (gameState.puck.targetY - gameState.puck.y) * 0.25;
-        gameState.puck.rotation += (gameState.puck.targetR - (gameState.puck.rotation || 0)) * 0.25;
+        gameState.puck.x        += (gameState.puck.targetX - gameState.puck.x) * 0.4;
+        gameState.puck.y        += (gameState.puck.targetY - gameState.puck.y) * 0.4;
+        gameState.puck.rotation += (gameState.puck.targetR - (gameState.puck.rotation || 0)) * 0.4;
     }
     safeDrawCircleImage(images.puck, gameState.puck.x, gameState.puck.y, PUCK_RADIUS, gameState.puck.rotation);
 
@@ -331,9 +331,9 @@ function gameLoop(timestamp) {
     for (const id in gameState.players) {
         const p = gameState.players[id];
         if (p.targetX !== undefined) {
-            p.x        += (p.targetX - p.x) * 0.25;
-            p.y        += (p.targetY - p.y) * 0.25;
-            p.rotation += (p.targetR - (p.rotation || 0)) * 0.25;
+            p.x        += (p.targetX - p.x) * 0.4;
+            p.y        += (p.targetY - p.y) * 0.4;
+            p.rotation += (p.targetR - (p.rotation || 0)) * 0.4;
         }
 
         const img = images[p.char] || images.korzhik;
@@ -375,34 +375,27 @@ function gameLoop(timestamp) {
         const goalImg = images[`goal_${goalScorerChar}`] || images.goal_korzhik;
         if (goalImg.complete) {
             ctx.globalAlpha = opacity / 0.6;
-            ctx.drawImage(goalImg, canvas.width / 2 - 150, canvas.height / 2 - 170, 300, 300);
-            ctx.globalAlpha = 1.0;
-        }
-
-        // Ім'я того, хто забив
-        if (goalScorerName) {
-            ctx.globalAlpha = Math.min(opacity / 0.6, 1.0);
-            ctx.font = 'bold 32px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillStyle = 'white';
-            ctx.shadowColor = 'black'; ctx.shadowBlur = 8;
-            ctx.fillText(`${goalScorerName} — GOAL! 🎉`, canvas.width / 2, canvas.height / 2 + 160);
-            ctx.shadowBlur = 0;
+            ctx.drawImage(goalImg, canvas.width / 2 - 150, canvas.height / 2 - 150, 300, 300);
             ctx.globalAlpha = 1.0;
         }
     }
 
-    // Текст +ЕЛО
-    for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    // Текст +ЕЛО (БЕЗПЕЧНИЙ ВАРІАНТ)
+    for (let i = 0; i < floatingTexts.length; i++) {
         const ft = floatingTexts[i];
         ctx.fillStyle = `rgba(255, 215, 0, ${ft.life / 90})`;
-        ctx.font = 'bold 22px Arial'; ctx.textAlign = 'center';
+        ctx.font = 'bold 22px Arial'; 
+        ctx.textAlign = 'center';
         ctx.shadowColor = 'black'; ctx.shadowBlur = 4; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
         ctx.fillText(ft.text, ft.x, ft.y);
         ctx.shadowBlur = 0; ctx.shadowOffsetX = 0; ctx.shadowOffsetY = 0;
-        ft.y -= 1; ft.life--;
-        if (ft.life <= 0) floatingTexts.splice(i, 1);
+        
+        ft.y -= 1; 
+        ft.life--;
     }
+    
+    // Очищаємо масив від мертвих текстів ОКРЕМО від малювання
+    floatingTexts = floatingTexts.filter(ft => ft.life > 0);
 
     requestAnimationFrame(gameLoop);
 }
