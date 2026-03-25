@@ -573,6 +573,16 @@ io.on('connection', (socket) => {
             }
         }
     });
+    // ── WEBRTC СИГНАЛІЗАЦІЯ (ГОЛОСОВИЙ ЧАТ) ─────────────────────────
+    socket.on('webrtc-offer', (data) => {
+        io.to(data.target).emit('webrtc-offer', { sender: socket.id, sdp: data.sdp });
+    });
+    socket.on('webrtc-answer', (data) => {
+        io.to(data.target).emit('webrtc-answer', { sender: socket.id, sdp: data.sdp });
+    });
+    socket.on('webrtc-ice', (data) => {
+        io.to(data.target).emit('webrtc-ice', { sender: socket.id, candidate: data.candidate });
+    });
 });
 
 // ============================================================
