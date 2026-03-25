@@ -549,18 +549,40 @@ io.on('connection', (socket) => {
             return socket.emit('authResult', { success: false, msg: 'Ім\'я вже зайнято!' });
         }
         usersDb[username] = { password, elo: 1000 };
-        socket.emit('authResult', { success: true, username, elo: 1000 });
+        // ДОДАНО: передаємо userId (в нашому випадку це username)
+        socket.emit('authResult', { success: true, userId: username, username, elo: 1000 });
     });
 
     // ── ВХІД ─────────────────────────────────────────────────────────
     socket.on('login', ({ username, password }) => {
         const user = usersDb[username];
         if (user && user.password === password) {
-            socket.emit('authResult', { success: true, username, elo: user.elo });
+            // ДОДАНО: передаємо userId
+            socket.emit('authResult', { success: true, userId: username, username, elo: user.elo });
         } else {
             socket.emit('authResult', { success: false, msg: 'Невірний логін або пароль!' });
         }
     });
+
+    // ── АВТО-ВХІД (ДОДАНО) ───────────────────────────────────────────
+    socket.on('autoLogin', (userId) => {
+        // Оскільки ми зберігаємо username як userId
+        const user = usersDb[userId];
+        
+        if (user) {
+            // Якщо користувач знайдений в базі - авторизуємо
+            socket.emit('authResult', { 
+                success: true, 
+                userId: userId, 
+                username: userId, 
+                elo: user.elo 
+            });
+        } else {
+            // Якщо користувача не знайдено (база очистилась)
+            socket.emit('authResult', { success: false, msg: 'Сесія застаріла, увійдіть знову' });
+        }
+    });
+    
 
     // ── ПОШУК МАТЧУ ──────────────────────────────────────────────────
     socket.on('findMatch', (data) => {
