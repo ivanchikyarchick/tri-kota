@@ -16,7 +16,6 @@ let myId;
 let myUsername = '', myElo = 1000, myCharacter = 'korzhik', mySelectedMode = 1,
     currentRoom = null, myTeam = null, isSpectator = false;
 
-// ІКОНКИ ПРИСТРОЮ
 const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const myDeviceIcon = isMobileDevice ? '📱' : '💻';
 
@@ -41,30 +40,34 @@ images.goal_gonya.src    = 'assets/gon_gol.png';
 const hitSounds  = [new Audio('assets/shay1.mp3'), new Audio('assets/shay2.mp3')];
 const startSound = new Audio('assets/start.mp3');
 
-// === РОЗБЛОКУВАННЯ ЗВУКУ ДЛЯ ПЛАНШЕТІВ ТА ТЕЛЕФОНІВ ===
+// === СИСТЕМА РОЗБЛОКУВАННЯ ЗВУКУ (ДЛЯ ПЛАНШЕТІВ ТА ПК) ===
 let audioUnlocked = false;
-document.addEventListener('touchstart', function() {
+let audioCtx = null;
+
+const unlockAudio = function() {
     if (!audioUnlocked) {
-        startSound.play().then(() => {
-            startSound.pause();
-            startSound.currentTime = 0;
-        }).catch(() => {});
-        hitSounds.forEach(snd => {
-            snd.play().then(() => {
-                snd.pause();
-                snd.currentTime = 0;
-            }).catch(() => {});
-        });
+        startSound.play().then(() => { startSound.pause(); startSound.currentTime = 0; }).catch(() => {});
+        hitSounds.forEach(snd => { snd.play().then(() => { snd.pause(); snd.currentTime = 0; }).catch(() => {}); });
+        
+        const voicePlayer = document.getElementById('voice-player');
+        if (voicePlayer) { voicePlayer.play().then(() => { voicePlayer.pause(); voicePlayer.currentTime = 0; }).catch(() => {}); }
+
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+
         audioUnlocked = true;
+        document.removeEventListener('touchstart', unlockAudio);
+        document.removeEventListener('mousedown', unlockAudio);
     }
-}, { once: true, passive: true });
+};
+
+document.addEventListener('touchstart', unlockAudio, { passive: true });
+document.addEventListener('mousedown', unlockAudio, { passive: true });
 
 function safePlaySound(audioElement) {
     try {
         const playPromise = audioElement.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => { /* Ігноруємо блокування браузера */ });
-        }
+        if (playPromise !== undefined) playPromise.catch(error => {});
     } catch (e) {}
 }
 
@@ -184,14 +187,12 @@ function enterGame(roomId, state, spectator) {
     chatContainer.style.display = 'flex';
     if (chatToggleBtn) chatToggleBtn.style.display = 'flex';
     
-    // Показуємо кнопку рації, якщо мікрофон увімкнено
     if (mediaRecorder) {
         const pttBtn = document.getElementById('ptt-btn');
         if (pttBtn) pttBtn.style.display = 'block';
     }
 
     wakeUpChat();
-
     startSound.currentTime = 0;
     safePlaySound(startSound);
     
@@ -426,7 +427,7 @@ function gameLoop(timestamp) {
 }
 
 // ============================================================
-// ГОЛОСОВИЙ ЧАТ: РЕЖИМ РАЦІЇ (PUSH-TO-TALK)
+// ГОЛОСОВИЙ ЧАТ: РЕЖИМ РАЦІЇ З БРОНЬОВАНИМ ВІДТВОРЕННЯМ
 // ============================================================
 let mediaRecorder = null;
 let audioChunks = [];
@@ -456,12 +457,12 @@ async function initWalkieTalkie() {
         };
 
         document.getElementById('btn-enable-mic').style.display = 'none';
-        document.getElementById('mic-status').innerText = "✅ Мікрофон готовий! В грі тисни 'V'";
-        document.getElementById('mic-status').style.color = "#00ff00";
+        document.getElementById('mic-status').innerText = "✅ Микрофон готов! В игре жми 'V'";
+        document.getElementById('mic-status').style.color = "#4dff4d";
         
     } catch (err) {
         console.error("Помилка мікрофону:", err);
-        document.getElementById('mic-status').innerText = "❌ Доступ заборонено або немає мікрофона";
+        document.getElementById('mic-status').innerText = "❌ Доступ запрещен или нет микрофона";
         document.getElementById('mic-status').style.color = "#ff4d4d";
     }
 }
@@ -473,7 +474,7 @@ function startRecording() {
     mediaRecorder.start();
     
     const btn = document.getElementById('ptt-btn');
-    if(btn) { btn.style.backgroundColor = "rgba(255, 0, 0, 0.7)"; btn.innerText = "🔴 Запис..."; }
+    if(btn) { btn.style.backgroundColor = "rgba(255, 0, 0, 0.8)"; btn.innerText = "🔴 Запись..."; }
 }
 
 function stopRecording() {
@@ -482,10 +483,9 @@ function stopRecording() {
     mediaRecorder.stop();
     
     const btn = document.getElementById('ptt-btn');
-    if(btn) { btn.style.backgroundColor = "rgba(0, 0, 0, 0.7)"; btn.innerText = "🎙️ Утримуй (або тисни 'V')"; }
+    if(btn) { btn.style.backgroundColor = "rgba(0, 51, 102, 0.8)"; btn.innerText = "🎙️ Удерживай (или жми 'V')"; }
 }
 
-// Обробка клавіш та мишки
 document.addEventListener('keydown', (e) => {
     if (e.key.toLowerCase() === 'v' && !e.repeat && currentRoom) startRecording();
 });
@@ -493,17 +493,41 @@ document.addEventListener('keyup', (e) => {
     if (e.key.toLowerCase() === 'v' && currentRoom) stopRecording();
 });
 
-// Відтворення вхідних голосових повідомлень
+// УНІВЕРСАЛЬНИЙ ДЕШИФРАТОР ВХІДНОГО ГОЛОСУ
 socket.on('voice-message', (data) => {
     try {
+        floatingTexts.push({ x: WIDTH/2, y: 150, text: `🔊 Говорит: ${data.sender}`, life: 120 });
+        
         const blob = new Blob([data.audioBlob], { type: data.mimeType });
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
         
-        // Маленький візуальний ефект: хто говорить
-        floatingTexts.push({ x: WIDTH/2, y: 150, text: `🔊 ${data.sender}`, life: 120 });
-        
-        safePlaySound(audio);
+        // Спроба 1: Професійний Web Audio API (ідеально перетравлює різні формати між ПК і планшетами)
+        if (audioCtx) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                audioCtx.decodeAudioData(e.target.result, (buffer) => {
+                    const source = audioCtx.createBufferSource();
+                    source.buffer = buffer;
+                    source.connect(audioCtx.destination);
+                    source.start(0);
+                }, (err) => {
+                    // Якщо не вийшло, переходимо до спроби 2
+                    playViaHtmlTag(blob);
+                });
+            };
+            reader.readAsArrayBuffer(blob);
+        } else {
+            // Спроба 2: Якщо Web Audio API недоступний, використовуємо прихований HTML плеєр
+            playViaHtmlTag(blob);
+        }
+
+        function playViaHtmlTag(audioBlob) {
+            const url = URL.createObjectURL(audioBlob);
+            const voicePlayer = document.getElementById('voice-player');
+            if (voicePlayer) {
+                voicePlayer.src = url;
+                safePlaySound(voicePlayer);
+            }
+        }
     } catch (e) {
         console.error("Помилка відтворення:", e);
     }
