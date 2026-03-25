@@ -233,49 +233,9 @@ function gameLoop(timestamp) {
     floatingTexts = floatingTexts.filter(ft => ft.life > 0); requestAnimationFrame(gameLoop);
 }
 
-// ========== ГОЛОСОВИЙ ЧАТ З ТРАНСКРИПЦІЄЮ ТА PITCH SHIFT ==========
+// ========== ГОЛОСОВИЙ ЧАТ З ТРАНСКРИПЦІЄЮ ==========
 let mediaRecorder = null, audioChunks = [], isRecording = false, recorderMimeType = '';
 let recognition = null; // для Web Speech API
-let pitchShiftSemitones = 0; // значення від -12 до 12
-
-// Функція pitch shift: змінює висоту тону аудіобуфера (зберігаючи тривалість)
-async function applyPitchShift(audioBuffer, semitones) {
-    if (semitones === 0) return audioBuffer;
-    const factor = Math.pow(2, semitones / 12); // pitch shift factor (>1 = вище)
-    const originalSampleRate = audioBuffer.sampleRate;
-    const newSampleRate = originalSampleRate * factor;
-    const numberOfChannels = audioBuffer.numberOfChannels;
-    const originalLength = audioBuffer.length;
-    const newLength = Math.round(originalLength / factor);
-    
-    // Створюємо новий буфер зі зміненою частотою дискретизації
-    const offlineCtx = new OfflineAudioContext(numberOfChannels, newLength, newSampleRate);
-    const source = offlineCtx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(offlineCtx.destination);
-    source.start(0);
-    const renderedBuffer = await offlineCtx.startRendering();
-    
-    // Тепер маємо буфер з pitch shift, але іншої тривалості.
-    // Щоб повернути оригінальну тривалість, робимо ресемплінг до початкового sampleRate.
-    if (newSampleRate === originalSampleRate) return renderedBuffer;
-    
-    const finalLength = Math.round(renderedBuffer.length * originalSampleRate / newSampleRate);
-    const finalBuffer = audioCtx.createBuffer(numberOfChannels, finalLength, originalSampleRate);
-    for (let ch = 0; ch < numberOfChannels; ch++) {
-        const srcData = renderedBuffer.getChannelData(ch);
-        const dstData = finalBuffer.getChannelData(ch);
-        const ratio = renderedBuffer.length / finalLength;
-        for (let i = 0; i < finalLength; i++) {
-            const srcIndex = i * ratio;
-            const indexFloor = Math.floor(srcIndex);
-            const indexCeil = Math.min(indexFloor + 1, renderedBuffer.length - 1);
-            const frac = srcIndex - indexFloor;
-            dstData[i] = srcData[indexFloor] * (1 - frac) + srcData[indexCeil] * frac;
-        }
-    }
-    return finalBuffer;
-}
 
 async function initWalkieTalkie() {
     try {
@@ -287,120 +247,36 @@ async function initWalkieTalkie() {
         mediaRecorder.onstop = async () => {
             if (audioChunks.length === 0 || !currentRoom) return;
             
-            // Спочатку транскрипція (якщо була)
+            // Отримуємо транскрипцію (якщо була)
             let transcript = '';
             if (recognition && recognition.result) {
                 transcript = recognition.result;
             }
             
-            // Отримуємо аудіо Blob
-            let audioBlob = new Blob(audioChunks, { type: recorderMimeType });
-            // Застосовуємо pitch shift, якщо потрібно
-            if (pitchShiftSemitones !== 0 && audioCtx) {
-                try {
-                    const arrayBuffer = await audioBlob.arrayBuffer();
-                    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                    const shiftedBuffer = await applyPitchShift(audioBuffer, pitchShiftSemitones);
-                    // Конвертуємо AudioBuffer назад у Blob
-                    const wavBlob = await audioBufferToWav(shiftedBuffer);
-                    audioBlob = wavBlob;
-                } catch(e) { console.error("Pitch shift failed", e); }
-            }
-            
+            const audioBlob = new Blob(audioChunks, { type: recorderMimeType });
             const arrayBuffer = await audioBlob.arrayBuffer();
             socket.emit('voice-message', { 
                 roomId: currentRoom, 
                 sender: myUsername, 
                 audioBlob: arrayBuffer, 
-                mimeType: audioBlob.type,
+                mimeType: recorderMimeType,
                 transcript: transcript 
             });
             audioChunks = [];
             
             // Додаємо своє повідомлення в чат (тільки текст)
-            addChatMessage(`🔊 Вы (${transcript || 'голосовое сообщение'})`);
+            addChatMessage(`🔊 Вы${transcript ? `: "${transcript}"` : ' (голосовое сообщение)'}`);
         };
 
         document.getElementById('btn-enable-mic').style.display = 'none';
         document.getElementById('mic-status').innerText = "✅ Микрофон готов! В игре жми 'V'";
         document.getElementById('mic-status').style.color = "#4dff4d";
         
-        // Показати елементи керування pitch
-        const pitchDiv = document.getElementById('pitch-control');
-        if (pitchDiv) pitchDiv.style.display = 'block';
-        const pitchSlider = document.getElementById('pitch-slider');
-        const pitchValue = document.getElementById('pitch-value');
-        const pitchReset = document.getElementById('pitch-reset');
-        if (pitchSlider) {
-            pitchSlider.addEventListener('input', (e) => {
-                pitchShiftSemitones = parseInt(e.target.value, 10);
-                pitchValue.innerText = pitchShiftSemitones;
-            });
-        }
-        if (pitchReset) {
-            pitchReset.addEventListener('click', () => {
-                pitchShiftSemitones = 0;
-                pitchSlider.value = 0;
-                pitchValue.innerText = 0;
-            });
-        }
-        
         initAudioContext();
     } catch (err) {
         document.getElementById('mic-status').innerText = "❌ Доступ запрещен или нет микрофона";
         document.getElementById('mic-status').style.color = "#ff4d4d";
     }
-}
-
-// Допоміжна функція для конвертації AudioBuffer у WAV Blob (щоб зберегти тип)
-function audioBufferToWav(buffer) {
-    const numChannels = buffer.numberOfChannels;
-    const sampleRate = buffer.sampleRate;
-    const format = 1; // PCM
-    const bitDepth = 16;
-    const bytesPerSample = bitDepth / 8;
-    const blockAlign = numChannels * bytesPerSample;
-    
-    const samples = [];
-    for (let ch = 0; ch < numChannels; ch++) {
-        samples.push(buffer.getChannelData(ch));
-    }
-    
-    const dataLength = samples[0].length * numChannels * bytesPerSample;
-    const bufferLength = 44 + dataLength;
-    const arrayBuffer = new ArrayBuffer(bufferLength);
-    const view = new DataView(arrayBuffer);
-    
-    function writeString(view, offset, string) {
-        for (let i = 0; i < string.length; i++) {
-            view.setUint8(offset + i, string.charCodeAt(i));
-        }
-    }
-    
-    writeString(view, 0, 'RIFF');
-    view.setUint32(4, bufferLength - 8, true);
-    writeString(view, 8, 'WAVE');
-    writeString(view, 12, 'fmt ');
-    view.setUint32(16, 16, true);
-    view.setUint16(20, format, true);
-    view.setUint16(22, numChannels, true);
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * blockAlign, true);
-    view.setUint16(32, blockAlign, true);
-    view.setUint16(34, bitDepth, true);
-    writeString(view, 36, 'data');
-    view.setUint32(40, dataLength, true);
-    
-    let offset = 44;
-    for (let i = 0; i < samples[0].length; i++) {
-        for (let ch = 0; ch < numChannels; ch++) {
-            const sample = Math.max(-1, Math.min(1, samples[ch][i]));
-            const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
-            view.setInt16(offset, intSample, true);
-            offset += 2;
-        }
-    }
-    return new Blob([arrayBuffer], { type: 'audio/wav' });
 }
 
 function startRecording() {
