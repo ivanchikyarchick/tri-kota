@@ -23,6 +23,24 @@
     <div id="menu" style="display:none;">
         <h1 id="welcome-text">Добро пожаловать!</h1>
         <h2 id="my-elo-display" style="color: #ff9900; margin-top: -10px;">🏆 Рейтинг Эло: 1000</h2>
+        <div id="voice-settings" style="margin-top: 20px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);">
+    <h3 style="margin-top: 0; color: #4da6ff;">🎙️ Голосовой чат</h3>
+    
+    <label style="cursor: pointer; display: block; margin-bottom: 10px;">
+        <input type="checkbox" id="voice-enable" onchange="toggleVoice()" style="transform: scale(1.2); margin-right: 8px;"> 
+        Включить микро
+    </label>
+    
+    <select id="mic-select" onchange="changeMicrophone()" style="width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 5px; background: #333; color: white; border: none;">
+        <option value="">Дайте доступ к микро...</option>
+    </select>
+    
+    <label style="font-size: 14px; color: #ccc;">Voice Changer:</label>
+    <select id="voice-effect" onchange="changeVoiceEffect()" style="width: 100%; padding: 8px; margin-top: 5px; border-radius: 5px; background: #333; color: white; border: none;">
+        <option value="none">Без изменений</option>
+        <option value="robot">🤖 Робот</option>
+    </select>
+</div>
         
         <div class="selection">
             <h3>1. Выбери персонажа:</h3>
