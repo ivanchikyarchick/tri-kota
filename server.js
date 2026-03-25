@@ -15,19 +15,19 @@ const WIDTH         = 1200;
 const HEIGHT        = 600;
 const PLAYER_RADIUS = 40;
 const PUCK_RADIUS   = 20;
-const FRICTION      = 0.992; // Адаптовано для 60 FPS
+const FRICTION      = 0.992; 
 const GOAL_HEIGHT   = 150;
 const WALL_PADDING  = 25;
-const MAX_PUCK_SPEED = 50;   // Збільшено ліміт швидкості
+const MAX_PUCK_SPEED = 50;   
 
 // ============================================================
 // СТАН СЕРВЕРА
 // ============================================================
-const usersDb       = {};   // { username: { password, elo } }
-const rooms         = {};   // { roomId: { state, players, endTime, eloAwarded, loopInterval } }
+const usersDb       = {};   
+const rooms         = {};   
 const queues        = { 1: [], 2: [], 3: [] };
 const ipConnections = {};
-const playerStats   = {};   // адаптивна статистика гравців
+const playerStats   = {};   
 let totalOnline     = 0;
 
 // ============================================================
@@ -60,7 +60,6 @@ function applyPhysics(obj1, obj2, r1, r2, mass1, mass2, bounciness) {
         const ny         = dy / dist;
         const totalMass  = mass1 + mass2;
 
-        // Виштовхування об'єктів
         obj1.x -= nx * overlap * (mass2 / totalMass);
         obj1.y -= ny * overlap * (mass2 / totalMass);
         obj2.x += nx * overlap * (mass1 / totalMass);
@@ -73,7 +72,6 @@ function applyPhysics(obj1, obj2, r1, r2, mass1, mass2, bounciness) {
         const ky = obj1.vy - obj2.vy;
         const p  = 2 * (nx * kx + ny * ky) / totalMass;
 
-        // Зміна швидкості (імпульс)
         obj1.vx -= p * mass2 * bounciness * nx;
         obj1.vy -= p * mass2 * bounciness * ny;
         obj2.vx += p * mass1 * bounciness * nx;
@@ -88,33 +86,9 @@ function applyPhysics(obj1, obj2, r1, r2, mass1, mass2, bounciness) {
     return false;
 }
 
-// ============================================================
-// ШІ — ПЕРЕДБАЧЕННЯ ТРАЄКТОРІЇ ШАЙБИ
-// ============================================================
-function predictPuckPosition(puck, steps) {
-    let x = puck.x, y = puck.y, vx = puck.vx, vy = puck.vy;
-    for (let i = 0; i < steps; i++) {
-        x += vx; y += vy;
-        vx *= FRICTION; vy *= FRICTION;
-        if (y - PUCK_RADIUS < WALL_PADDING)              { y = PUCK_RADIUS + WALL_PADDING;              vy *= -0.9; }
-        else if (y + PUCK_RADIUS > HEIGHT - WALL_PADDING){ y = HEIGHT - PUCK_RADIUS - WALL_PADDING;     vy *= -0.9; }
-        if (x - PUCK_RADIUS < WALL_PADDING)              { x = PUCK_RADIUS + WALL_PADDING;              vx *= -0.9; }
-        else if (x + PUCK_RADIUS > WIDTH - WALL_PADDING) { x = WIDTH - PUCK_RADIUS - WALL_PADDING;      vx *= -0.9; }
-    }
-    return { x, y };
-}
-
-// ============================================================
-// ШІ — ВІДСТЕЖЕННЯ ПОВЕДІНКИ ГРАВЦЯ
-// ============================================================
 function trackPlayerBehavior(roomId, playerId) {
     if (!playerStats[playerId]) {
-        playerStats[playerId] = {
-            rushCount:   0,
-            prefersTop:  0,
-            lastX:       null,
-            lastY:       null,
-        };
+        playerStats[playerId] = { rushCount: 0, prefersTop: 0, lastX: null, lastY: null };
     }
     const game = rooms[roomId];
     if (!game) return;
@@ -131,32 +105,6 @@ function trackPlayerBehavior(roomId, playerId) {
     stats.lastY = p.y;
 }
 
-// ============================================================
-// ШІ — РІВЕНЬ АДАПТАЦІЇ ДО ГРАВЦЯ
-// ============================================================
-function getAdaptiveLevel(playerId) {
-    const stats = playerStats[playerId];
-    if (!stats) return { reactionSteps: 15, jitter: 12, aggressionMult: 1.0, prefersTop: 0 };
-
-    const rushScore = Math.min(stats.rushCount / 60, 1); // 0..1
-    return {
-        reactionSteps:  Math.round(15 - rushScore * 8),   // 15→7 кадрів
-        jitter:         Math.round(12 - rushScore * 8),   // 12→4 рандом
-        aggressionMult: 1 + rushScore * 0.6,              // 1.0→1.6x
-        prefersTop:     stats.prefersTop,
-    };
-}
-
-// ============================================================
-// ШІ — ГОЛОВНА ЛОГІКА РІШЕНЬ БОТА
-// ============================================================
-function getBotDecision(p, puck, teammates, enemies, remainingSeconds, score, enemyIds) {
-    // ... (логіка залишена без змін для стабільності бота)
-}
-
-// ============================================================
-// ГОЛИ ТА СКИДАННЯ
-// ============================================================
 function resetAfterGoal(roomId, scorerChar) {
     const game = rooms[roomId];
     if (!game) return;
@@ -219,9 +167,6 @@ function updateElo(roomId, finalScore) {
     for (const id in game.state.players) delete playerStats[id];
 }
 
-// ============================================================
-// ГОЛОВНИЙ ІГРОВИЙ ЦИКЛ
-// ============================================================
 function startGameLoop(roomId) {
     const game = rooms[roomId];
     if (game.loopInterval) return;
@@ -306,18 +251,12 @@ function startGameLoop(roomId) {
 
                 p.vx = p.vx || 0; p.vy = p.vy || 0; p.vr = p.vr || 0;
 
-                // ── БОТ ──────────────────────────────────────────────────
                 if (p.isBot && !state.goalTriggered) {
                     const isTeam1  = p.team === 1;
                     const myGoalX  = isTeam1 ? WALL_PADDING + 60 : WIDTH - WALL_PADDING - 60;
                     const goalY    = HEIGHT / 2;
 
-                    const diff = p.botDifficulty || 'medium';
-                    const cfg = {
-                        easy:   { tickAttack: 28, tickDefend: 10, miss: 70, moveFactor: 0.10, maxSpd: 14 },
-                        medium: { tickAttack: 18, tickDefend: 6,  miss: 35, moveFactor: 0.18, maxSpd: 22 },
-                        hard:   { tickAttack: 8,  tickDefend: 3,  miss: 8,  moveFactor: 0.28, maxSpd: 32 },
-                    }[diff];
+                    const cfg = { tickAttack: 18, tickDefend: 6, miss: 35, moveFactor: 0.18, maxSpd: 22 };
 
                     if (!p._botTick) p._botTick = 0;
                     p._botTick--;
@@ -353,11 +292,7 @@ function startGameLoop(roomId) {
                     p.isDragging   = true;
                     p._botMoveCfg  = { factor: cfg.moveFactor, maxSpd: cfg.maxSpd };
                 }
-                // ─────────────────────────────────────────────────────────
 
-                // РОБИМО ГРАВЦЯ "ЛЕГКИМ" ТА ФІКСИМО ТЕЛЕПОРТИ: 
-                // factor: 0.6 робить рух чутливим
-                // maxSpd: 55 запобігає перестрибуванню через шайбу за 1 кадр (55 < 40+20)
                 if (p.isDragging && p.tx !== undefined && p.ty !== undefined) {
                     const cfg = p.isBot ? (p._botMoveCfg || { factor: 0.18, maxSpd: 22 }) : { factor: 0.6, maxSpd: 55 };
                     p.vx = (p.tx - p.x) * cfg.factor;
@@ -382,8 +317,6 @@ function startGameLoop(roomId) {
                 if (p.y < WALL_PADDING + PLAYER_RADIUS)         { p.y = WALL_PADDING + PLAYER_RADIUS;         p.vy *= -0.5; }
                 if (p.y > HEIGHT - WALL_PADDING - PLAYER_RADIUS){ p.y = HEIGHT - WALL_PADDING - PLAYER_RADIUS; p.vy *= -0.5; }
 
-                // ФІКС КОЛІЗІЇ: Гравець тепер має "нескінченну" масу (9999) відносно шайби (1).
-                // Шайба повністю виштовхується, а гравець не проскакує і не тягне її назад.
                 if (applyPhysics(p, puck, PLAYER_RADIUS, PUCK_RADIUS, 9999, 1, 1.2)) {
                     hit = true; puck.lastHit = id;
                 }
@@ -409,6 +342,7 @@ function startGameLoop(roomId) {
                         r:     pl.rotation || 0,
                         ping:  pl.ping || 0,
                         isBot: pl.isBot,
+                        d:     pl.device || '💻' // Передача пристрою
                     };
                 }
             }
@@ -417,17 +351,11 @@ function startGameLoop(roomId) {
         } catch (err) {
             console.error('КРАШ УНИКНЕНО:', err);
         }
-    }, 1000 / 60); // ДОДАНО ПЛАВНІСТЬ: 60 FPS замість 30
+    }, 1000 / 60); 
 }
 
-// ============================================================
-// PING
-// ============================================================
 setInterval(() => io.emit('pingTimer', Date.now()), 2000);
 
-// ============================================================
-// SOCKET.IO ПІДКЛЮЧЕННЯ
-// ============================================================
 io.on('connection', (socket) => {
     let ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
     if (typeof ip === 'string') ip = ip.split(',')[0].trim();
@@ -441,7 +369,7 @@ io.on('connection', (socket) => {
 
     socket.on('register', ({ username, password }) => {
         if (usersDb[username]) {
-            return socket.emit('authResult', { success: false, msg: 'Ім\'я вже зайнято!' });
+            return socket.emit('authResult', { success: false, msg: 'Имя уже занято!' });
         }
         usersDb[username] = { password, elo: 1000 };
         socket.emit('authResult', { success: true, userId: username, username, elo: 1000 });
@@ -452,21 +380,16 @@ io.on('connection', (socket) => {
         if (user && user.password === password) {
             socket.emit('authResult', { success: true, userId: username, username, elo: user.elo });
         } else {
-            socket.emit('authResult', { success: false, msg: 'Невірний логін або пароль!' });
+            socket.emit('authResult', { success: false, msg: 'Неверный логин или пароль!' });
         }
     });
 
     socket.on('autoLogin', (userId) => {
         const user = usersDb[userId];
         if (user) {
-            socket.emit('authResult', { 
-                success: true, 
-                userId: userId, 
-                username: userId, 
-                elo: user.elo 
-            });
+            socket.emit('authResult', { success: true, userId: userId, username: userId, elo: user.elo });
         } else {
-            socket.emit('authResult', { success: false, msg: 'Сесія застаріла, увійдіть знову' });
+            socket.emit('authResult', { success: false, msg: 'Сессия устарела, войдите заново' });
         }
     });
     
@@ -483,7 +406,6 @@ io.on('connection', (socket) => {
                 const gameState      = initGameState();
 
                 playersInMatch.forEach((p, index) => {
-                    p.socket.join(roomId);
                     const team = index < mode ? 1 : 2;
                     gameState.players[p.socket.id] = {
                         x:            team === 1 ? 150 : 1050,
@@ -495,36 +417,27 @@ io.on('connection', (socket) => {
                         lastMoveTime: Date.now(),
                         isBot:        false,
                         isDragging:   false,
+                        device:       p.data.device || '💻' // Збереження пристрою
                     };
                 });
 
-                rooms[roomId] = {
-                    state:       gameState,
-                    players:     playersInMatch.map(p => p.socket.id),
-                    endTime:     Date.now() + 180 * 1000,
-                    eloAwarded:  false,
-                };
-
+                rooms[roomId] = { state: gameState, players: playersInMatch.map(p => p.socket.id), endTime: Date.now() + 180 * 1000, eloAwarded: false };
                 io.to(roomId).emit('matchFound', { roomId, state: gameState });
                 startGameLoop(roomId);
             } else {
-                socket.emit('waiting', `Очікування гравців (${queue.length}/${mode * 2})...`);
+                socket.emit('waiting', `Ожидание игроков (${queue.length}/${mode * 2})...`);
             }
-        } catch (err) {
-            console.error('findMatch error:', err);
-        }
+        } catch (err) {}
     });
 
     socket.on('cancelMatchMatchmaking', () => {
-        [1, 2, 3].forEach(mode => {
-            queues[mode] = queues[mode].filter(p => p.socket.id !== socket.id);
-        });
+        [1, 2, 3].forEach(mode => queues[mode] = queues[mode].filter(p => p.socket.id !== socket.id));
     });
 
     socket.on('spectateRandom', () => {
         const activeRoomsIds = Object.keys(rooms);
         if (activeRoomsIds.length === 0) {
-            socket.emit('spectateError', 'Зараз немає активних ігор 😔'); return;
+            socket.emit('spectateError', 'Сейчас нет активных игр 😔'); return;
         }
         const randomRoomId = activeRoomsIds[Math.floor(Math.random() * activeRoomsIds.length)];
         socket.join(randomRoomId);
@@ -554,18 +467,14 @@ io.on('connection', (socket) => {
     });
 
     socket.on('chatMessage', (data) => {
-        if (rooms[data.roomId]) {
-            io.to(data.roomId).emit('chatMessage', { sender: data.sender, text: data.text });
-        }
+        if (rooms[data.roomId]) io.to(data.roomId).emit('chatMessage', { sender: data.sender, text: data.text });
     });
 
     socket.on('disconnect', () => {
         ipConnections[ip]--;
         totalOnline--;
         io.emit('onlineCount', totalOnline);
-        [1, 2, 3].forEach(mode => {
-            queues[mode] = queues[mode].filter(p => p.socket.id !== socket.id);
-        });
+        [1, 2, 3].forEach(mode => queues[mode] = queues[mode].filter(p => p.socket.id !== socket.id));
         for (const roomId in rooms) {
             if (rooms[roomId].players.includes(socket.id)) {
                 const p = rooms[roomId].state.players[socket.id];
@@ -573,7 +482,8 @@ io.on('connection', (socket) => {
             }
         }
     });
-    // ── WEBRTC СИГНАЛІЗАЦІЯ (ГОЛОСОВИЙ ЧАТ) ─────────────────────────
+
+    // WEBRTC ПОДІЇ ДЛЯ ГОЛОСУ
     socket.on('webrtc-offer', (data) => {
         io.to(data.target).emit('webrtc-offer', { sender: socket.id, sdp: data.sdp });
     });
@@ -585,8 +495,5 @@ io.on('connection', (socket) => {
     });
 });
 
-// ============================================================
-// ЗАПУСК СЕРВЕРА
-// ============================================================
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => console.log(`Сервер запущено: http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`Сервер запущен: http://localhost:${PORT}`));
