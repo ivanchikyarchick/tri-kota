@@ -406,6 +406,7 @@ io.on('connection', (socket) => {
                 const gameState      = initGameState();
 
                 playersInMatch.forEach((p, index) => {
+                    p.socket.join(roomId);
                     const team = index < mode ? 1 : 2;
                     gameState.players[p.socket.id] = {
                         x:            team === 1 ? 150 : 1050,
