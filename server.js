@@ -18,7 +18,7 @@ const PUCK_RADIUS   = 20;
 const FRICTION      = 0.992; 
 const GOAL_HEIGHT   = 150;
 const WALL_PADDING  = 25;
-const MAX_PUCK_SPEED = 50;   
+const MAX_PUCK_SPEED = 60;   
 
 // ============================================================
 // СТАН СЕРВЕРА
@@ -30,9 +30,6 @@ const ipConnections = {};
 const playerStats   = {};   
 let totalOnline     = 0;
 
-// ============================================================
-// ІГРОВИЙ СТАН
-// ============================================================
 function initGameState() {
     return {
         players: {},
@@ -43,7 +40,7 @@ function initGameState() {
 }
 
 // ============================================================
-// ФІЗИКА
+// ФІЗИКА ТА ЛОГІКА
 // ============================================================
 function applyPhysics(obj1, obj2, r1, r2, mass1, mass2, bounciness) {
     if (!obj1 || !obj2 || isNaN(obj1.x) || isNaN(obj2.x)) return false;
@@ -167,6 +164,9 @@ function updateElo(roomId, finalScore) {
     for (const id in game.state.players) delete playerStats[id];
 }
 
+// ============================================================
+// ГОЛОВНИЙ ІГРОВИЙ ЦИКЛ (60 FPS)
+// ============================================================
 function startGameLoop(roomId) {
     const game = rooms[roomId];
     if (game.loopInterval) return;
@@ -342,7 +342,7 @@ function startGameLoop(roomId) {
                         r:     pl.rotation || 0,
                         ping:  pl.ping || 0,
                         isBot: pl.isBot,
-                        d:     pl.device || '💻' // Передача пристрою
+                        d:     pl.device || '💻'
                     };
                 }
             }
@@ -356,6 +356,9 @@ function startGameLoop(roomId) {
 
 setInterval(() => io.emit('pingTimer', Date.now()), 2000);
 
+// ============================================================
+// З'ЄДНАННЯ SOCKET.IO
+// ============================================================
 io.on('connection', (socket) => {
     let ip = socket.handshake.headers['x-forwarded-for'] || socket.handshake.address;
     if (typeof ip === 'string') ip = ip.split(',')[0].trim();
@@ -406,7 +409,11 @@ io.on('connection', (socket) => {
                 const gameState      = initGameState();
 
                 playersInMatch.forEach((p, index) => {
-                    p.socket.join(roomId);
+                    // ==========================================
+                    // ФІКС: Закидаємо гравців у кімнату!
+                    p.socket.join(roomId); 
+                    // ==========================================
+                    
                     const team = index < mode ? 1 : 2;
                     gameState.players[p.socket.id] = {
                         x:            team === 1 ? 150 : 1050,
@@ -418,7 +425,7 @@ io.on('connection', (socket) => {
                         lastMoveTime: Date.now(),
                         isBot:        false,
                         isDragging:   false,
-                        device:       p.data.device || '💻' // Збереження пристрою
+                        device:       p.data.device || '💻'
                     };
                 });
 
@@ -471,6 +478,21 @@ io.on('connection', (socket) => {
         if (rooms[data.roomId]) io.to(data.roomId).emit('chatMessage', { sender: data.sender, text: data.text });
     });
 
+    // ============================================================
+    // ГОЛОСОВИЙ ЧАТ (РЕЖИМ РАЦІЇ)
+    // ============================================================
+    socket.on('voice-message', (data) => {
+        try {
+            if (rooms[data.roomId]) {
+                socket.to(data.roomId).emit('voice-message', { 
+                    sender: data.sender, 
+                    audioBlob: data.audioBlob, 
+                    mimeType: data.mimeType 
+                });
+            }
+        } catch(e) { console.error("Помилка пересилки аудіо:", e); }
+    });
+
     socket.on('disconnect', () => {
         ipConnections[ip]--;
         totalOnline--;
@@ -482,17 +504,6 @@ io.on('connection', (socket) => {
                 if (p) p.isBot = true;
             }
         }
-    });
-
-    // WEBRTC ПОДІЇ ДЛЯ ГОЛОСУ
-    socket.on('webrtc-offer', (data) => {
-        io.to(data.target).emit('webrtc-offer', { sender: socket.id, sdp: data.sdp });
-    });
-    socket.on('webrtc-answer', (data) => {
-        io.to(data.target).emit('webrtc-answer', { sender: socket.id, sdp: data.sdp });
-    });
-    socket.on('webrtc-ice', (data) => {
-        io.to(data.target).emit('webrtc-ice', { sender: socket.id, candidate: data.candidate });
     });
 });
 
