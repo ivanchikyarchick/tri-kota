@@ -32,7 +32,7 @@ images.goal_kompot.src = 'assets/kom_gol.png'; images.goal_gonya.src = 'assets/g
 const hitSounds = [new Audio('assets/shay1.mp3'), new Audio('assets/shay2.mp3')];
 const startSound = new Audio('assets/start.mp3');
 
-// === РОЗБЛОКУВАННЯ ЗВУКУ (Для всіх пристроїв) ===
+// === РОЗБЛОКУВАННЯ ЗВУКУ ТА WEB AUDIO ===
 let audioUnlocked = false;
 let audioCtx = null; // Web Audio API контекст для голосу
 
@@ -50,7 +50,7 @@ const unlockAudio = function() {
     if (!audioUnlocked) {
         startSound.play().then(() => { startSound.pause(); startSound.currentTime = 0; }).catch(() => {});
         hitSounds.forEach(snd => { snd.play().then(() => { snd.pause(); snd.currentTime = 0; }).catch(() => {}); });
-        initAudioContext(); // ініціалізуємо AudioContext
+        initAudioContext();
         audioUnlocked = true;
         document.removeEventListener('touchstart', unlockAudio);
         document.removeEventListener('mousedown', unlockAudio);
@@ -233,8 +233,49 @@ function gameLoop(timestamp) {
     floatingTexts = floatingTexts.filter(ft => ft.life > 0); requestAnimationFrame(gameLoop);
 }
 
-// === РАЦІЯ (ARRAY BUFFER + Web Audio) ===
+// ========== ГОЛОСОВИЙ ЧАТ З ТРАНСКРИПЦІЄЮ ТА PITCH SHIFT ==========
 let mediaRecorder = null, audioChunks = [], isRecording = false, recorderMimeType = '';
+let recognition = null; // для Web Speech API
+let pitchShiftSemitones = 0; // значення від -12 до 12
+
+// Функція pitch shift: змінює висоту тону аудіобуфера (зберігаючи тривалість)
+async function applyPitchShift(audioBuffer, semitones) {
+    if (semitones === 0) return audioBuffer;
+    const factor = Math.pow(2, semitones / 12); // pitch shift factor (>1 = вище)
+    const originalSampleRate = audioBuffer.sampleRate;
+    const newSampleRate = originalSampleRate * factor;
+    const numberOfChannels = audioBuffer.numberOfChannels;
+    const originalLength = audioBuffer.length;
+    const newLength = Math.round(originalLength / factor);
+    
+    // Створюємо новий буфер зі зміненою частотою дискретизації
+    const offlineCtx = new OfflineAudioContext(numberOfChannels, newLength, newSampleRate);
+    const source = offlineCtx.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineCtx.destination);
+    source.start(0);
+    const renderedBuffer = await offlineCtx.startRendering();
+    
+    // Тепер маємо буфер з pitch shift, але іншої тривалості.
+    // Щоб повернути оригінальну тривалість, робимо ресемплінг до початкового sampleRate.
+    if (newSampleRate === originalSampleRate) return renderedBuffer;
+    
+    const finalLength = Math.round(renderedBuffer.length * originalSampleRate / newSampleRate);
+    const finalBuffer = audioCtx.createBuffer(numberOfChannels, finalLength, originalSampleRate);
+    for (let ch = 0; ch < numberOfChannels; ch++) {
+        const srcData = renderedBuffer.getChannelData(ch);
+        const dstData = finalBuffer.getChannelData(ch);
+        const ratio = renderedBuffer.length / finalLength;
+        for (let i = 0; i < finalLength; i++) {
+            const srcIndex = i * ratio;
+            const indexFloor = Math.floor(srcIndex);
+            const indexCeil = Math.min(indexFloor + 1, renderedBuffer.length - 1);
+            const frac = srcIndex - indexFloor;
+            dstData[i] = srcData[indexFloor] * (1 - frac) + srcData[indexCeil] * frac;
+        }
+    }
+    return finalBuffer;
+}
 
 async function initWalkieTalkie() {
     try {
@@ -245,42 +286,181 @@ async function initWalkieTalkie() {
         mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunks.push(e.data); };
         mediaRecorder.onstop = async () => {
             if (audioChunks.length === 0 || !currentRoom) return;
-            const audioBlob = new Blob(audioChunks, { type: recorderMimeType });
+            
+            // Спочатку транскрипція (якщо була)
+            let transcript = '';
+            if (recognition && recognition.result) {
+                transcript = recognition.result;
+            }
+            
+            // Отримуємо аудіо Blob
+            let audioBlob = new Blob(audioChunks, { type: recorderMimeType });
+            // Застосовуємо pitch shift, якщо потрібно
+            if (pitchShiftSemitones !== 0 && audioCtx) {
+                try {
+                    const arrayBuffer = await audioBlob.arrayBuffer();
+                    const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                    const shiftedBuffer = await applyPitchShift(audioBuffer, pitchShiftSemitones);
+                    // Конвертуємо AudioBuffer назад у Blob
+                    const wavBlob = await audioBufferToWav(shiftedBuffer);
+                    audioBlob = wavBlob;
+                } catch(e) { console.error("Pitch shift failed", e); }
+            }
+            
             const arrayBuffer = await audioBlob.arrayBuffer();
-            socket.emit('voice-message', { roomId: currentRoom, sender: myUsername, audioBlob: arrayBuffer, mimeType: recorderMimeType });
-            audioChunks = []; 
+            socket.emit('voice-message', { 
+                roomId: currentRoom, 
+                sender: myUsername, 
+                audioBlob: arrayBuffer, 
+                mimeType: audioBlob.type,
+                transcript: transcript 
+            });
+            audioChunks = [];
+            
+            // Додаємо своє повідомлення в чат (тільки текст)
+            addChatMessage(`🔊 Вы (${transcript || 'голосовое сообщение'})`);
         };
 
         document.getElementById('btn-enable-mic').style.display = 'none';
         document.getElementById('mic-status').innerText = "✅ Микрофон готов! В игре жми 'V'";
         document.getElementById('mic-status').style.color = "#4dff4d";
         
-        initAudioContext(); // переконуємось, що контекст ініціалізовано
+        // Показати елементи керування pitch
+        const pitchDiv = document.getElementById('pitch-control');
+        if (pitchDiv) pitchDiv.style.display = 'block';
+        const pitchSlider = document.getElementById('pitch-slider');
+        const pitchValue = document.getElementById('pitch-value');
+        const pitchReset = document.getElementById('pitch-reset');
+        if (pitchSlider) {
+            pitchSlider.addEventListener('input', (e) => {
+                pitchShiftSemitones = parseInt(e.target.value, 10);
+                pitchValue.innerText = pitchShiftSemitones;
+            });
+        }
+        if (pitchReset) {
+            pitchReset.addEventListener('click', () => {
+                pitchShiftSemitones = 0;
+                pitchSlider.value = 0;
+                pitchValue.innerText = 0;
+            });
+        }
+        
+        initAudioContext();
     } catch (err) {
         document.getElementById('mic-status').innerText = "❌ Доступ запрещен или нет микрофона";
         document.getElementById('mic-status').style.color = "#ff4d4d";
     }
 }
 
+// Допоміжна функція для конвертації AudioBuffer у WAV Blob (щоб зберегти тип)
+function audioBufferToWav(buffer) {
+    const numChannels = buffer.numberOfChannels;
+    const sampleRate = buffer.sampleRate;
+    const format = 1; // PCM
+    const bitDepth = 16;
+    const bytesPerSample = bitDepth / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    
+    const samples = [];
+    for (let ch = 0; ch < numChannels; ch++) {
+        samples.push(buffer.getChannelData(ch));
+    }
+    
+    const dataLength = samples[0].length * numChannels * bytesPerSample;
+    const bufferLength = 44 + dataLength;
+    const arrayBuffer = new ArrayBuffer(bufferLength);
+    const view = new DataView(arrayBuffer);
+    
+    function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) {
+            view.setUint8(offset + i, string.charCodeAt(i));
+        }
+    }
+    
+    writeString(view, 0, 'RIFF');
+    view.setUint32(4, bufferLength - 8, true);
+    writeString(view, 8, 'WAVE');
+    writeString(view, 12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, format, true);
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * blockAlign, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitDepth, true);
+    writeString(view, 36, 'data');
+    view.setUint32(40, dataLength, true);
+    
+    let offset = 44;
+    for (let i = 0; i < samples[0].length; i++) {
+        for (let ch = 0; ch < numChannels; ch++) {
+            const sample = Math.max(-1, Math.min(1, samples[ch][i]));
+            const intSample = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+            view.setInt16(offset, intSample, true);
+            offset += 2;
+        }
+    }
+    return new Blob([arrayBuffer], { type: 'audio/wav' });
+}
+
 function startRecording() {
     if (!mediaRecorder || isRecording) return;
-    isRecording = true; audioChunks = []; mediaRecorder.start();
-    const btn = document.getElementById('ptt-btn'); if(btn) { btn.style.backgroundColor = "rgba(255, 0, 0, 0.8)"; btn.innerText = "🔴 Запись..."; }
+    isRecording = true;
+    audioChunks = [];
+    mediaRecorder.start();
+    const btn = document.getElementById('ptt-btn'); 
+    if(btn) { btn.style.backgroundColor = "rgba(255, 0, 0, 0.8)"; btn.innerText = "🔴 Запись..."; }
+    
+    // Запускаємо транскрипцію, якщо підтримується Web Speech API
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        recognition = new SpeechRecognition();
+        recognition.lang = 'ru-RU';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        recognition.onresult = (event) => {
+            if (event.results.length > 0) {
+                recognition.result = event.results[0][0].transcript;
+            }
+        };
+        recognition.onerror = (e) => { console.warn("Speech recognition error", e); };
+        recognition.start();
+    } else {
+        recognition = null;
+    }
 }
 
 function stopRecording() {
     if (!mediaRecorder || !isRecording) return;
-    isRecording = false; setTimeout(() => { mediaRecorder.stop(); }, 100);
-    const btn = document.getElementById('ptt-btn'); if(btn) { btn.style.backgroundColor = "rgba(0, 51, 102, 0.8)"; btn.innerText = "🎙️ Удерживай (или жми 'V')"; }
+    isRecording = false;
+    setTimeout(() => { mediaRecorder.stop(); }, 100);
+    if (recognition) {
+        recognition.stop();
+    }
+    const btn = document.getElementById('ptt-btn'); 
+    if(btn) { btn.style.backgroundColor = "rgba(0, 51, 102, 0.8)"; btn.innerText = "🎙️ Удерживай (или жми 'V')"; }
 }
 
 document.addEventListener('keydown', (e) => { if (e.key.toLowerCase() === 'v' && !e.repeat && currentRoom) startRecording(); });
 document.addEventListener('keyup', (e) => { if (e.key.toLowerCase() === 'v' && currentRoom) stopRecording(); });
 
-// Оновлений обробник голосових повідомлень (Web Audio)
+// Функція додавання повідомлення в чат
+function addChatMessage(text) {
+    const msgs = document.getElementById('chat-messages');
+    if (!msgs) return;
+    msgs.innerHTML += `<div>${text}</div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+    wakeUpChat();
+}
+
+// Оновлений обробник голосових повідомлень (Web Audio + чат)
 socket.on('voice-message', (data) => {
     try {
         if (!audioCtx) return;
+        // Додаємо повідомлення в чат
+        const transcriptMsg = data.transcript ? `: "${data.transcript}"` : '';
+        addChatMessage(`🔊 ${data.sender}${transcriptMsg}`);
+        
         const arrayBuffer = data.audioBlob;
         audioCtx.decodeAudioData(arrayBuffer, (buffer) => {
             const source = audioCtx.createBufferSource();
