@@ -24,22 +24,31 @@
         <h1 id="welcome-text">Добро пожаловать!</h1>
         <h2 id="my-elo-display" style="color: #ff9900; margin-top: -10px;">🏆 Рейтинг Эло: 1000</h2>
         <div id="voice-settings" style="margin-top: 20px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);">
-    <h3 style="margin-top: 0; color: #4da6ff;">🎙️ Голосовой чат</h3>
+<div id="voice-settings">
+    <h3>🎙️ Голосовой чат</h3>
     
-    <label style="cursor: pointer; display: block; margin-bottom: 10px;">
-        <input type="checkbox" id="voice-enable" onchange="toggleVoice()" style="transform: scale(1.2); margin-right: 8px;"> 
-        Включить микро
-    </label>
+    <div class="voice-control-group">
+        <label>
+            <input type="checkbox" id="voice-enable" onchange="toggleVoice()"> 
+            Включить микрофон
+        </label>
+    </div>
     
-    <select id="mic-select" onchange="changeMicrophone()" style="width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 5px; background: #333; color: white; border: none;">
-        <option value="">Дайте доступ к микро...</option>
-    </select>
+    <div class="voice-control-group">
+        <select id="mic-select" class="voice-select" onchange="changeMicrophone()">
+            <option value="">Дайте доступ к микрофону...</option>
+        </select>
+    </div>
     
-    <label style="font-size: 14px; color: #ccc;">Voice Changer:</label>
-    <select id="voice-effect" onchange="changeVoiceEffect()" style="width: 100%; padding: 8px; margin-top: 5px; border-radius: 5px; background: #333; color: white; border: none;">
-        <option value="none">Без изменений</option>
-        <option value="robot">🤖 Робот</option>
-    </select>
+    <div class="voice-control-group">
+        <label style="font-size: 13px; color: #b3d9ff; margin-bottom: 5px;">Ефект голосу:</label>
+        <select id="voice-effect" class="voice-select" onchange="changeVoiceEffect()">
+            <option value="none">Без ефекта</option>
+            <option value="robot">🤖 Робот</option>
+            <option value="echo">🗣️ Ехо</option>
+            <option value="radio">📻 Старая рация</option>
+        </select>
+    </div>
 </div>
         
         <div class="selection">
