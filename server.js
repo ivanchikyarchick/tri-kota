@@ -15,10 +15,11 @@ const WIDTH         = 1200;
 const HEIGHT        = 600;
 const PLAYER_RADIUS = 40;
 const PUCK_RADIUS   = 20;
-const FRICTION      = 0.985;
+const FRICTION      = 0.985; // Тертя шайби
 const GOAL_HEIGHT   = 150;
 const WALL_PADDING  = 25;
-const MAX_PUCK_SPEED = 35;
+const CORNER_RADIUS = 100;   // Додано: радіус закруглення кутів арени
+const MAX_PUCK_SPEED = 60;   // Змінено з 35 на 60
 
 // ============================================================
 // СТАН СЕРВЕРА
@@ -43,7 +44,7 @@ function initGameState() {
 }
 
 // ============================================================
-// ФІЗИКА
+// ФІЗИКА (для гравців між собою)
 // ============================================================
 function applyPhysics(obj1, obj2, r1, r2, mass1, mass2, bounciness) {
     if (!obj1 || !obj2 || isNaN(obj1.x) || isNaN(obj2.x)) return false;
@@ -136,11 +137,11 @@ function getAdaptiveLevel(playerId) {
     const stats = playerStats[playerId];
     if (!stats) return { reactionSteps: 15, jitter: 12, aggressionMult: 1.0, prefersTop: 0 };
 
-    const rushScore = Math.min(stats.rushCount / 60, 1); // 0..1
+    const rushScore = Math.min(stats.rushCount / 60, 1); 
     return {
-        reactionSteps:  Math.round(15 - rushScore * 8),   // 15→7 кадрів
-        jitter:         Math.round(12 - rushScore * 8),   // 12→4 рандом
-        aggressionMult: 1 + rushScore * 0.6,              // 1.0→1.6x
+        reactionSteps:  Math.round(15 - rushScore * 8),   
+        jitter:         Math.round(12 - rushScore * 8),   
+        aggressionMult: 1 + rushScore * 0.6,              
         prefersTop:     stats.prefersTop,
     };
 }
@@ -159,7 +160,6 @@ function getBotDecision(p, puck, teammates, enemies, remainingSeconds, score, en
     const losing     = myScore < enemyScore;
     const lastMinute = remainingSeconds < 60;
 
-    // Найбільш активний ворог задає темп адаптації
     let adaptLevel = { reactionSteps: 15, jitter: 12, aggressionMult: 1.0, prefersTop: 0 };
     for (const eid of enemyIds) {
         const lvl = getAdaptiveLevel(eid);
@@ -177,7 +177,6 @@ function getBotDecision(p, puck, teammates, enemies, remainingSeconds, score, en
     const defenders = teammates.filter(t => isTeam1 ? t.x < WIDTH * 0.45 : t.x > WIDTH * 0.55).length;
     const attackers = teammates.length - defenders;
 
-    // ── РЕЖИМ 1: ЕКСТРЕНИЙ БЛОК ВОРІТ ────────────────────────────────
     if (puckMovingToMyGoal && puckDistToMyGoal < 250) {
         const gkX     = myGoalX + (isTeam1 ? 55 : -55);
         const clampedY = Math.max(
@@ -187,27 +186,17 @@ function getBotDecision(p, puck, teammates, enemies, remainingSeconds, score, en
         return { tx: gkX, ty: clampedY, mode: 'emergency_block' };
     }
 
-    // ── РЕЖИМ 2: СТРАТЕГІЧНИЙ ЗАХИСТ ЗОНИ ────────────────────────────
     if (puckOnOurSide && defenders === 0) {
         const defX = myGoalX + (isTeam1 ? 120 : -120);
         let defY   = predicted.y;
-
-        // Адаптуємось до звички гравця
-        if (Math.abs(adaptLevel.prefersTop) > 10) {
-            defY += adaptLevel.prefersTop > 0 ? -20 : 20;
-        }
+        if (Math.abs(adaptLevel.prefersTop) > 10) defY += adaptLevel.prefersTop > 0 ? -20 : 20;
         defY = Math.max(WALL_PADDING + PLAYER_RADIUS, Math.min(HEIGHT - WALL_PADDING - PLAYER_RADIUS, defY));
         return { tx: defX, ty: defY, mode: 'strategic_defense' };
     }
 
-    // ── РЕЖИМ 3: ПЕРЕХОПЛЕННЯ ─────────────────────────────────────────
-    if (puckSpeed < 6 && puckOnOurSide) {
-        return { tx: predicted.x, ty: predicted.y, mode: 'intercept' };
-    }
+    if (puckSpeed < 6 && puckOnOurSide) return { tx: predicted.x, ty: predicted.y, mode: 'intercept' };
 
-    // ── РЕЖИМ 4: ПРИЦІЛЬНА АТАКА ──────────────────────────────────────
     if (!puckOnOurSide || (losing && lastMinute)) {
-        // Б'ємо у вільний кут — аналізуємо де стоять вороги
         let targetY = goalY;
         if (enemies.length > 0) {
             const nearestEnemy = enemies.reduce((a, b) =>
@@ -217,14 +206,11 @@ function getBotDecision(p, puck, teammates, enemies, remainingSeconds, score, en
                 ? goalY - GOAL_HEIGHT * 0.35
                 : goalY + GOAL_HEIGHT * 0.35;
         }
-
         const offsetX  = (PLAYER_RADIUS + PUCK_RADIUS + 8) * (isTeam1 ? -1 : 1);
         const approachX = predicted.x + offsetX;
-
         const aimDX  = eneGoalX - predicted.x;
         const aimDY  = targetY  - predicted.y;
         const aimLen = Math.sqrt(aimDX ** 2 + aimDY ** 2) || 1;
-
         return {
             tx:   approachX,
             ty:   predicted.y - (aimDY / aimLen) * 15 * adaptLevel.aggressionMult,
@@ -232,13 +218,9 @@ function getBotDecision(p, puck, teammates, enemies, remainingSeconds, score, en
         };
     }
 
-    // ── РЕЖИМ 5: СТРАТЕГІЧНЕ ПОЗИЦІЮВАННЯ ────────────────────────────
     const holdX = attackers > 0
         ? myGoalX + (isTeam1 ? 150 : -150)
-        : (isTeam1
-            ? Math.min(WIDTH * 0.4, puck.x - 80)
-            : Math.max(WIDTH * 0.6, puck.x + 80));
-
+        : (isTeam1 ? Math.min(WIDTH * 0.4, puck.x - 80) : Math.max(WIDTH * 0.6, puck.x + 80));
     const holdY = goalY + (puck.y - goalY) * 0.45;
     return { tx: holdX, ty: holdY, mode: 'positioning' };
 }
@@ -305,7 +287,6 @@ function updateElo(roomId, finalScore) {
         if (dbUser.elo < 0) dbUser.elo = 0;
         io.to(id).emit('eloUpdated', { elo: dbUser.elo, change: eloChange });
     }
-    // Очищаємо статистику адаптації після матчу
     for (const id in game.state.players) delete playerStats[id];
 }
 
@@ -315,6 +296,12 @@ function updateElo(roomId, finalScore) {
 function startGameLoop(roomId) {
     const game = rooms[roomId];
     if (game.loopInterval) return;
+
+    // Константи меж арени (для шайби) з урахуванням радіуса
+    const LEFT_BOUND = WALL_PADDING + PUCK_RADIUS;
+    const RIGHT_BOUND = WIDTH - WALL_PADDING - PUCK_RADIUS;
+    const TOP_BOUND = WALL_PADDING + PUCK_RADIUS;
+    const BOTTOM_BOUND = HEIGHT - WALL_PADDING - PUCK_RADIUS;
 
     game.loopInterval = setInterval(() => {
         try {
@@ -333,20 +320,17 @@ function startGameLoop(roomId) {
             const puck       = state.puck;
             let   hit        = false;
 
-            // Санітарна перевірка шайби
             if (isNaN(puck.x) || isNaN(puck.y) || Math.abs(puck.x) > 4000) {
                 puck.x = WIDTH / 2; puck.y = HEIGHT / 2;
                 puck.vx = 0; puck.vy = 0;
             }
 
-            // Обмеження швидкості шайби
             const puckSpeed = Math.sqrt(puck.vx ** 2 + puck.vy ** 2);
             if (puckSpeed > MAX_PUCK_SPEED) {
                 puck.vx = (puck.vx / puckSpeed) * MAX_PUCK_SPEED;
                 puck.vy = (puck.vy / puckSpeed) * MAX_PUCK_SPEED;
             }
 
-            // Рух шайби
             puck.x        += puck.vx;
             puck.y        += puck.vy;
             puck.rotation  = (puck.rotation || 0) + (puck.vr || 0);
@@ -354,36 +338,68 @@ function startGameLoop(roomId) {
             puck.vy       *= FRICTION;
             puck.vr       *= 0.98;
 
-            // Відбиття від стін (верх/низ)
-            if (puck.y - PUCK_RADIUS < WALL_PADDING) {
-                puck.y = PUCK_RADIUS + WALL_PADDING; puck.vy *= -0.9; puck.vr += puck.vx * 0.05; hit = true;
-            } else if (puck.y + PUCK_RADIUS > HEIGHT - WALL_PADDING) {
-                puck.y = HEIGHT - PUCK_RADIUS - WALL_PADDING; puck.vy *= -0.9; puck.vr -= puck.vx * 0.05; hit = true;
-            }
-
-            // Ворота та відбиття від бокових стін
+            // --- НОВА ЛОГІКА КОЛІЗІЙ ШАЙБИ З АРЕНОЮ ТА КУТАМИ ---
             const inGoalZone = puck.y > HEIGHT / 2 - GOAL_HEIGHT / 2 && puck.y < HEIGHT / 2 + GOAL_HEIGHT / 2;
+            
             if (inGoalZone) {
-                if (puck.x - PUCK_RADIUS < WALL_PADDING && !state.goalTriggered) {
+                // Логіка гола
+                if (puck.x < LEFT_BOUND && !state.goalTriggered) {
                     state.score.team2++; state.goalTriggered = true;
                     giveInstantElo(roomId, 2, puck.lastHit);
                     resetAfterGoal(roomId, 'karamelka');
-                } else if (puck.x + PUCK_RADIUS > WIDTH - WALL_PADDING && !state.goalTriggered) {
+                } else if (puck.x > RIGHT_BOUND && !state.goalTriggered) {
                     state.score.team1++; state.goalTriggered = true;
                     giveInstantElo(roomId, 1, puck.lastHit);
                     resetAfterGoal(roomId, 'korzhik');
                 }
             } else {
-                if (puck.x - PUCK_RADIUS < WALL_PADDING) {
-                    puck.x = PUCK_RADIUS + WALL_PADDING; puck.vx *= -0.9; puck.vr += puck.vy * 0.05; hit = true;
-                } else if (puck.x + PUCK_RADIUS > WIDTH - WALL_PADDING) {
-                    puck.x = WIDTH - PUCK_RADIUS - WALL_PADDING; puck.vx *= -0.9; puck.vr -= puck.vy * 0.05; hit = true;
+                // 1. Прямі стіни
+                if (puck.x < LEFT_BOUND && puck.y > TOP_BOUND + CORNER_RADIUS && puck.y < BOTTOM_BOUND - CORNER_RADIUS) { 
+                    puck.x = LEFT_BOUND; puck.vx *= -0.9; puck.vr += puck.vy * 0.05; hit = true; 
+                } else if (puck.x > RIGHT_BOUND && puck.y > TOP_BOUND + CORNER_RADIUS && puck.y < BOTTOM_BOUND - CORNER_RADIUS) { 
+                    puck.x = RIGHT_BOUND; puck.vx *= -0.9; puck.vr -= puck.vy * 0.05; hit = true; 
+                }
+                
+                if (puck.y < TOP_BOUND && puck.x > LEFT_BOUND + CORNER_RADIUS && puck.x < RIGHT_BOUND - CORNER_RADIUS) { 
+                    puck.y = TOP_BOUND; puck.vy *= -0.9; puck.vr += puck.vx * 0.05; hit = true; 
+                } else if (puck.y > BOTTOM_BOUND && puck.x > LEFT_BOUND + CORNER_RADIUS && puck.x < RIGHT_BOUND - CORNER_RADIUS) { 
+                    puck.y = BOTTOM_BOUND; puck.vy *= -0.9; puck.vr -= puck.vx * 0.05; hit = true; 
+                }
+
+                // 2. Закруглені кути
+                const corners = [
+                    { cx: LEFT_BOUND + CORNER_RADIUS, cy: TOP_BOUND + CORNER_RADIUS },
+                    { cx: RIGHT_BOUND - CORNER_RADIUS, cy: TOP_BOUND + CORNER_RADIUS },
+                    { cx: LEFT_BOUND + CORNER_RADIUS, cy: BOTTOM_BOUND - CORNER_RADIUS },
+                    { cx: RIGHT_BOUND - CORNER_RADIUS, cy: BOTTOM_BOUND - CORNER_RADIUS }
+                ];
+
+                for (let corner of corners) {
+                    const cdx = puck.x - corner.cx;
+                    const cdy = puck.y - corner.cy;
+                    const cDist = Math.hypot(cdx, cdy);
+                    
+                    if (cDist > CORNER_RADIUS && 
+                       ((puck.x < corner.cx && puck.y < corner.cy) || 
+                        (puck.x > corner.cx && puck.y < corner.cy) || 
+                        (puck.x < corner.cx && puck.y > corner.cy) || 
+                        (puck.x > corner.cx && puck.y > corner.cy))) {
+                        
+                        const nx = cdx / (cDist || 1);
+                        const ny = cdy / (cDist || 1);
+                        puck.x = corner.cx + nx * CORNER_RADIUS;
+                        puck.y = corner.cy + ny * CORNER_RADIUS;
+                        
+                        const dotProduct = puck.vx * nx + puck.vy * ny;
+                        puck.vx -= 2 * dotProduct * nx * 0.9;
+                        puck.vy -= 2 * dotProduct * ny * 0.9;
+                        hit = true;
+                    }
                 }
             }
 
             if (state.goalTriggered) { puck.vx *= 0.5; puck.vy *= 0.5; }
 
-            // Відстежуємо поведінку живих гравців (для адаптації ШІ)
             const playerKeys = Object.keys(state.players);
             for (const id of playerKeys) {
                 if (!state.players[id].isBot) trackPlayerBehavior(roomId, id);
@@ -391,12 +407,10 @@ function startGameLoop(roomId) {
 
             const now = Date.now();
 
-            // Цикл по гравцях
             for (let i = 0; i < playerKeys.length; i++) {
                 const id = playerKeys[i];
                 const p  = state.players[id];
 
-                // AFK → бот
                 if (!p.isBot && now - p.lastMoveTime > 15000) {
                     p.isBot = true;
                     io.to(id).emit('afkWarning');
@@ -409,11 +423,6 @@ function startGameLoop(roomId) {
                     const isTeam1  = p.team === 1;
                     const myGoalX  = isTeam1 ? WALL_PADDING + 60 : WIDTH - WALL_PADDING - 60;
                     const goalY    = HEIGHT / 2;
-
-                    // Параметри по складності
-                    // easy:   повільний, великий промах, рідко оновлює ціль
-                    // medium: середній
-                    // hard:   швидкий, малий промах, часто оновлює
                     const diff = p.botDifficulty || 'medium';
                     const cfg = {
                         easy:   { tickAttack: 28, tickDefend: 10, miss: 70, moveFactor: 0.10, maxSpd: 14 },
@@ -430,22 +439,16 @@ function startGameLoop(roomId) {
                         const distPuckToMyGoal = Math.abs(puck.x - myGoalX);
 
                         if (puckComingToGoal && distPuckToMyGoal < 320) {
-                            // ЗАХИСТ
                             p._tx = myGoalX + (isTeam1 ? 70 : -70);
-                            p._ty = Math.max(
-                                goalY - GOAL_HEIGHT / 2 + PLAYER_RADIUS,
-                                Math.min(goalY + GOAL_HEIGHT / 2 - PLAYER_RADIUS,
-                                    puck.y + (Math.random() - 0.5) * cfg.miss * 0.5)
-                            );
+                            p._ty = Math.max(goalY - GOAL_HEIGHT / 2 + PLAYER_RADIUS,
+                                Math.min(goalY + GOAL_HEIGHT / 2 - PLAYER_RADIUS, puck.y + (Math.random() - 0.5) * cfg.miss * 0.5));
                             p._botTick = cfg.tickDefend;
                         } else if (puckOnOurSide) {
-                            // АТАКА: підходимо збоку від шайби
                             const miss = (Math.random() - 0.5) * cfg.miss;
                             p._tx = puck.x + (isTeam1 ? -55 : 55);
                             p._ty = puck.y + miss;
                             p._botTick = cfg.tickAttack;
                         } else {
-                            // ПОЗИЦІЯ
                             const drift = (Math.random() - 0.5) * cfg.miss * 0.6;
                             p._tx = myGoalX + (isTeam1 ? 180 : -180);
                             p._ty = goalY + (puck.y - goalY) * 0.4 + drift;
@@ -458,17 +461,19 @@ function startGameLoop(roomId) {
                     p.isDragging   = true;
                     p._botMoveCfg  = { factor: cfg.moveFactor, maxSpd: cfg.maxSpd };
                 }
-                // ─────────────────────────────────────────────────────────
 
+                // --- ЛОГІКА РУХУ ГРАВЦЯ (Знято ефект ковадла) ---
                 if (p.isDragging && p.tx !== undefined && p.ty !== undefined) {
-                    const cfg    = p.isBot ? (p._botMoveCfg || { factor: 0.18, maxSpd: 22 }) : { factor: 0.4, maxSpd: 60 };
+                    // Зменшено factor з 0.4 до 0.25 для плавності
+                    const cfg = p.isBot ? (p._botMoveCfg || { factor: 0.18, maxSpd: 22 }) : { factor: 0.25, maxSpd: 60 };
                     p.vx = (p.tx - p.x) * cfg.factor;
                     p.vy = (p.ty - p.y) * cfg.factor;
                     p.vr *= 0.95;
                     const speed = Math.sqrt(p.vx ** 2 + p.vy ** 2);
                     if (speed > cfg.maxSpd) { p.vx = (p.vx / speed) * cfg.maxSpd; p.vy = (p.vy / speed) * cfg.maxSpd; }
                 } else {
-                    p.vx *= 0.94; p.vy *= 0.94; p.vr *= 0.97;
+                    // Зменшено тертя з 0.94 до 0.85 (швидше зупиняється, менше ковзає)
+                    p.vx *= 0.85; p.vy *= 0.85; p.vr *= 0.97;
                     const speed = Math.sqrt(p.vx ** 2 + p.vy ** 2);
                     if (speed > 3) p.vr += (p.vx > 0 ? 1 : -1) * speed * 0.025;
                 }
@@ -477,7 +482,6 @@ function startGameLoop(roomId) {
                 p.y        += p.vy;
                 p.rotation  = (p.rotation || 0) + p.vr;
 
-                // Межі поля для гравців
                 const minX = p.team === 1 ? WALL_PADDING + PLAYER_RADIUS : WIDTH / 2 + PLAYER_RADIUS;
                 const maxX = p.team === 1 ? WIDTH / 2 - PLAYER_RADIUS    : WIDTH - WALL_PADDING - PLAYER_RADIUS;
                 if (p.x < minX) { p.x = minX; p.vx *= -0.5; }
@@ -485,18 +489,43 @@ function startGameLoop(roomId) {
                 if (p.y < WALL_PADDING + PLAYER_RADIUS)         { p.y = WALL_PADDING + PLAYER_RADIUS;         p.vy *= -0.5; }
                 if (p.y > HEIGHT - WALL_PADDING - PLAYER_RADIUS){ p.y = HEIGHT - WALL_PADDING - PLAYER_RADIUS; p.vy *= -0.5; }
 
-                // Зіткнення гравця з шайбою
-                if (applyPhysics(p, puck, PLAYER_RADIUS, PUCK_RADIUS, 4, 1, 1.6)) {
-                    hit = true; puck.lastHit = id;
+                // --- НОВА ЛОГІКА ЗІТКНЕННЯ ГРАВЦЯ З ШАЙБОЮ (Виправлено баг прокидання назад) ---
+                const dx = puck.x - p.x;
+                const dy = puck.y - p.y;
+                const dist = Math.hypot(dx, dy) || 1;
+                const minDist = PLAYER_RADIUS + PUCK_RADIUS;
+
+                if (dist < minDist) {
+                    // 1. Спочатку передаємо імпульс шайбі ДО виштовхування
+                    puck.vx += p.vx * 0.8;
+                    puck.vy += p.vy * 0.8;
+
+                    // 2. Виштовхуємо шайбу за межі гравця
+                    const overlap = minDist - dist;
+                    const nx = dx / dist;
+                    const ny = dy / dist;
+
+                    puck.x += nx * overlap;
+                    puck.y += ny * overlap;
+
+                    // 3. Додатковий пружний відскок
+                    puck.vx += nx * 2.5;
+                    puck.vy += ny * 2.5;
+                    
+                    // 4. Легка віддача гравцю
+                    p.vx -= nx * 0.5;
+                    p.vy -= ny * 0.5;
+
+                    hit = true; 
+                    puck.lastHit = id;
                 }
 
-                // Зіткнення між гравцями
+                // Зіткнення між гравцями (тут стара фізика працює нормально)
                 for (let j = i + 1; j < playerKeys.length; j++) {
                     applyPhysics(p, state.players[playerKeys[j]], PLAYER_RADIUS, PLAYER_RADIUS, 4, 4, 0.8);
                 }
             }
 
-            // Надсилаємо стиснутий стан
             const miniState = {
                 p: {},
                 u: { x: Math.round(puck.x), y: Math.round(puck.y), r: puck.rotation },
@@ -543,48 +572,32 @@ io.on('connection', (socket) => {
     totalOnline++;
     io.emit('onlineCount', totalOnline);
 
-    // ── РЕЄСТРАЦІЯ ────────────────────────────────────────────────────
     socket.on('register', ({ username, password }) => {
         if (usersDb[username]) {
             return socket.emit('authResult', { success: false, msg: 'Ім\'я вже зайнято!' });
         }
         usersDb[username] = { password, elo: 1000 };
-        // ДОДАНО: передаємо userId (в нашому випадку це username)
         socket.emit('authResult', { success: true, userId: username, username, elo: 1000 });
     });
 
-    // ── ВХІД ─────────────────────────────────────────────────────────
     socket.on('login', ({ username, password }) => {
         const user = usersDb[username];
         if (user && user.password === password) {
-            // ДОДАНО: передаємо userId
             socket.emit('authResult', { success: true, userId: username, username, elo: user.elo });
         } else {
             socket.emit('authResult', { success: false, msg: 'Невірний логін або пароль!' });
         }
     });
 
-    // ── АВТО-ВХІД (ДОДАНО) ───────────────────────────────────────────
     socket.on('autoLogin', (userId) => {
-        // Оскільки ми зберігаємо username як userId
         const user = usersDb[userId];
-        
         if (user) {
-            // Якщо користувач знайдений в базі - авторизуємо
-            socket.emit('authResult', { 
-                success: true, 
-                userId: userId, 
-                username: userId, 
-                elo: user.elo 
-            });
+            socket.emit('authResult', { success: true, userId: userId, username: userId, elo: user.elo });
         } else {
-            // Якщо користувача не знайдено (база очистилась)
             socket.emit('authResult', { success: false, msg: 'Сесія застаріла, увійдіть знову' });
         }
     });
     
-
-    // ── ПОШУК МАТЧУ ──────────────────────────────────────────────────
     socket.on('findMatch', (data) => {
         try {
             const mode  = data.mode;
@@ -630,14 +643,12 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ── СКАСУВАННЯ ЧЕРГИ ─────────────────────────────────────────────
     socket.on('cancelMatchMatchmaking', () => {
         [1, 2, 3].forEach(mode => {
             queues[mode] = queues[mode].filter(p => p.socket.id !== socket.id);
         });
     });
 
-    // ── ГЛЯДАЧ ───────────────────────────────────────────────────────
     socket.on('spectateRandom', () => {
         const activeRoomsIds = Object.keys(rooms);
         if (activeRoomsIds.length === 0) {
@@ -648,7 +659,6 @@ io.on('connection', (socket) => {
         socket.emit('spectateStart', { roomId: randomRoomId, state: rooms[randomRoomId].state });
     });
 
-    // ── ВВЕДЕННЯ ГРИ ─────────────────────────────────────────────────
     socket.on('input', (data) => {
         try {
             if (!data || !data.roomId || !rooms[data.roomId]) return;
@@ -664,7 +674,6 @@ io.on('connection', (socket) => {
         } catch (err) {}
     });
 
-    // ── PING ─────────────────────────────────────────────────────────
     socket.on('pongTimer', (timestamp) => {
         for (const roomId in rooms) {
             const p = rooms[roomId].state.players[socket.id];
@@ -672,14 +681,12 @@ io.on('connection', (socket) => {
         }
     });
 
-    // ── ЧАТ ──────────────────────────────────────────────────────────
     socket.on('chatMessage', (data) => {
         if (rooms[data.roomId]) {
             io.to(data.roomId).emit('chatMessage', { sender: data.sender, text: data.text });
         }
     });
 
-    // ── ВІДКЛЮЧЕННЯ ──────────────────────────────────────────────────
     socket.on('disconnect', () => {
         ipConnections[ip]--;
         totalOnline--;
