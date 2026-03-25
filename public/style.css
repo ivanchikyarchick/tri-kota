@@ -222,3 +222,72 @@ button:active { transform: translateY(0); box-shadow: 0 3px 5px rgba(0,0,0,0.1);
     #chat-toggle-btn { bottom: 180px; left: 10px; width: 35px; height: 35px; font-size: 16px; }
     #chat-toggle-btn.chat-hidden { bottom: 10px; }
 }
+
+/* =========================================
+   ГОЛОСОВИЙ ЧАТ (VOICE CHAT UI)
+   ========================================= */
+#voice-settings {
+    margin-top: 25px;
+    background: rgba(0, 0, 0, 0.4);
+    padding: 20px;
+    border-radius: 15px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(10px);
+    text-align: left;
+}
+
+#voice-settings h3 {
+    margin-top: 0;
+    color: #4da6ff;
+    font-size: 18px;
+    margin-bottom: 15px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.voice-control-group {
+    margin-bottom: 15px;
+}
+
+.voice-control-group label {
+    color: #fff;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.voice-control-group input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    accent-color: #4da6ff;
+}
+
+.voice-select {
+    width: 100%;
+    padding: 10px 15px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 14px;
+    outline: none;
+    transition: all 0.3s ease;
+    cursor: pointer;
+}
+
+.voice-select:focus {
+    border-color: #4da6ff;
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 0 10px rgba(77, 166, 255, 0.3);
+}
+
+.voice-select option {
+    background: #1e3c72; /* Темно-синій фон для опцій */
+    color: white;
+}
