@@ -12,6 +12,8 @@ const mmText        = document.getElementById('mm-text');
 const eloDisplay    = document.getElementById('my-elo-display');
 const afkScreen     = document.getElementById('afk-screen');
 
+// ДОДАНО: myId
+let myId;
 let myUsername = '', myElo = 1000, myCharacter = 'korzhik', mySelectedMode = 1,
     currentRoom = null, myTeam = null, isSpectator = false;
 
@@ -67,23 +69,50 @@ socket.on('pingTimer',   (ts)    => { socket.emit('pongTimer', ts); });
 
 // === АВТОРИЗАЦІЯ ===
 function register() {
-    const user = document.getElementById('username').value, pass = document.getElementById('password').value;
+    // ОНОВЛЕНО: додано .trim()
+    const user = document.getElementById('username').value.trim();
+    const pass = document.getElementById('password').value.trim();
     if (user && pass) socket.emit('register', { username: user, password: pass });
 }
+
 function login() {
-    const user = document.getElementById('username').value, pass = document.getElementById('password').value;
+    // ОНОВЛЕНО: додано .trim()
+    const user = document.getElementById('username').value.trim();
+    const pass = document.getElementById('password').value.trim();
     if (user && pass) socket.emit('login', { username: user, password: pass });
 }
+
 socket.on('authResult', (res) => {
     if (res.success) {
-        myUsername = res.username; myElo = res.elo;
-        authDiv.style.display = 'none'; menuDiv.style.display = 'block';
+        // ОНОВЛЕНО: збереження даних та ID
+        myId = res.userId;
+        myUsername = res.username; 
+        myElo = res.elo;
+        
+        localStorage.setItem('userId', myId); // Зберігаємо сесію
+
+        authDiv.style.display = 'none'; 
+        menuDiv.style.display = 'block';
+        
         document.getElementById('welcome-text').innerText = `Привет, ${myUsername}!`;
         if (eloDisplay) eloDisplay.innerText = `🏆 Рейтинг Эло: ${myElo}`;
     } else {
-        authStatus.innerText = res.msg; authStatus.style.color = 'red';
+        authStatus.innerText = res.msg || 'Ошибка'; 
+        authStatus.style.color = 'red';
     }
 });
+
+// ДОДАНО: авто-вхід
+window.onload = () => {
+    const savedId = localStorage.getItem('userId');
+    if (savedId) socket.emit('autoLogin', savedId);
+};
+
+// ДОДАНО: вихід з акаунту
+function logout() {
+    localStorage.removeItem('userId');
+    location.reload();
+}
 
 // === ВИБІР ПЕРСОНАЖА / РЕЖИМУ ===
 function selectCharacter(char) {
