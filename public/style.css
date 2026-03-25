@@ -291,3 +291,37 @@ button:active { transform: translateY(0); box-shadow: 0 3px 5px rgba(0,0,0,0.1);
     background: #1e3c72; /* Темно-синій фон для опцій */
     color: white;
 }
+/* =========================================
+   МОБІЛЬНА АДАПТАЦІЯ (ТЕЛЕФОНИ ТА ПЛАНШЕТИ)
+   ========================================= */
+
+/* 1. Робимо меню скролимим зсередини, щоб воно ніколи не вилазило за екран */
+#auth, #menu {
+    max-height: 90vh;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch; /* Плавний скрол для iOS */
+    scrollbar-width: none; /* Прибираємо візуальний скролбар (Firefox) */
+}
+#auth::-webkit-scrollbar, #menu::-webkit-scrollbar {
+    display: none; /* Прибираємо скролбар (Chrome/Safari/Opera) */
+}
+
+/* 2. Компактний вигляд спеціально для телефонів */
+@media (max-width: 768px) {
+    #menu, #auth { padding: 15px; width: 95%; max-width: 400px; }
+    
+    #voice-settings { padding: 10px; margin-top: 10px; }
+    #voice-settings h3 { font-size: 15px; margin-bottom: 5px; }
+    .voice-control-group { margin-bottom: 8px; }
+    .voice-control-group label { font-size: 13px; }
+    .voice-select { padding: 6px; font-size: 13px; }
+    
+    .selection h3 { font-size: 14px; margin-bottom: 5px; }
+    .char-btn, .mode-btn { padding: 8px 10px; font-size: 12px; margin: 3px; }
+    
+    .action-buttons button { padding: 12px; font-size: 16px; margin-top: 5px; }
+    
+    /* Зменшуємо заголовки щоб звільнити ще більше місця */
+    #auth h1, #welcome-text { font-size: 22px; margin-bottom: 10px; }
+    #my-elo-display { font-size: 16px; margin-bottom: 10px; }
+}
