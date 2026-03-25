@@ -16,6 +16,7 @@ let myId;
 let myUsername = '', myElo = 1000, myCharacter = 'korzhik', mySelectedMode = 1,
     currentRoom = null, myTeam = null, isSpectator = false;
 
+// ІКОНКИ ПРИСТРОЮ
 const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
 const myDeviceIcon = isMobileDevice ? '📱' : '💻';
 
@@ -40,6 +41,33 @@ images.goal_gonya.src    = 'assets/gon_gol.png';
 const hitSounds  = [new Audio('assets/shay1.mp3'), new Audio('assets/shay2.mp3')];
 const startSound = new Audio('assets/start.mp3');
 
+// === РОЗБЛОКУВАННЯ ЗВУКУ ДЛЯ ПЛАНШЕТІВ ТА ТЕЛЕФОНІВ ===
+let audioUnlocked = false;
+document.addEventListener('touchstart', function() {
+    if (!audioUnlocked) {
+        startSound.play().then(() => {
+            startSound.pause();
+            startSound.currentTime = 0;
+        }).catch(() => {});
+        hitSounds.forEach(snd => {
+            snd.play().then(() => {
+                snd.pause();
+                snd.currentTime = 0;
+            }).catch(() => {});
+        });
+        audioUnlocked = true;
+    }
+}, { once: true, passive: true });
+
+function safePlaySound(audioElement) {
+    try {
+        const playPromise = audioElement.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => { /* Ігноруємо блокування браузера */ });
+        }
+    } catch (e) {}
+}
+
 const charColors = {
     korzhik:   '0, 100, 255',
     karamelka: '255, 105, 180',
@@ -55,10 +83,12 @@ document.addEventListener('touchmove', function(e) {
 }, { passive: false });
 
 function enableFullscreen() {
-    const elem = document.documentElement;
-    if      (elem.requestFullscreen)       elem.requestFullscreen();
-    else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
-    else if (elem.msRequestFullscreen)     elem.msRequestFullscreen();
+    try {
+        const elem = document.documentElement;
+        if      (elem.requestFullscreen)       elem.requestFullscreen();
+        else if (elem.webkitRequestFullscreen) elem.webkitRequestFullscreen();
+        else if (elem.msRequestFullscreen)     elem.msRequestFullscreen();
+    } catch(e) {}
 }
 
 socket.on('onlineCount', (count) => { document.getElementById('online-counter').innerText = `Онлайн: ${count}`; });
@@ -77,16 +107,20 @@ function login() {
 }
 
 function manualAutoLogin() {
-    const savedId = localStorage.getItem('userId');
-    if (savedId) socket.emit('autoLogin', savedId);
+    try {
+        const savedId = localStorage.getItem('userId');
+        if (savedId) socket.emit('autoLogin', savedId);
+    } catch(e) {}
 }
 
 window.onload = () => {
-    const savedId = localStorage.getItem('userId');
-    if (savedId) {
-        const autoBtn = document.getElementById('btn-autologin');
-        if(autoBtn) autoBtn.style.display = 'inline-block';
-    }
+    try {
+        const savedId = localStorage.getItem('userId');
+        if (savedId) {
+            const autoBtn = document.getElementById('btn-autologin');
+            if(autoBtn) autoBtn.style.display = 'inline-block';
+        }
+    } catch(e) {}
 };
 
 socket.on('authResult', (res) => {
@@ -94,7 +128,7 @@ socket.on('authResult', (res) => {
         myId = res.userId;
         myUsername = res.username; 
         myElo = res.elo;
-        localStorage.setItem('userId', myId);
+        try { localStorage.setItem('userId', myId); } catch(e) {}
         authDiv.style.display = 'none'; 
         menuDiv.style.display = 'block';
         document.getElementById('welcome-text').innerText = `Привет, ${myUsername}!`;
@@ -106,7 +140,7 @@ socket.on('authResult', (res) => {
 });
 
 function logout() {
-    localStorage.removeItem('userId');
+    try { localStorage.removeItem('userId'); } catch(e) {}
     location.reload();
 }
 
@@ -140,21 +174,26 @@ function enterGame(roomId, state, spectator) {
     isSpectator = spectator;
     currentRoom = roomId;
     gameState   = state;
-    if (!spectator) myTeam = gameState.players[socket.id]?.team;
+    if (!spectator && gameState.players[socket.id]) {
+        myTeam = gameState.players[socket.id].team;
+    }
+    
     mmOverlay.style.display = 'none';
     menuDiv.style.display   = 'none';
     canvas.style.display    = 'block';
     chatContainer.style.display = 'flex';
     if (chatToggleBtn) chatToggleBtn.style.display = 'flex';
+    
+    // Показуємо кнопку рації, якщо мікрофон увімкнено
+    if (mediaRecorder) {
+        const pttBtn = document.getElementById('ptt-btn');
+        if (pttBtn) pttBtn.style.display = 'block';
+    }
+
     wakeUpChat();
 
     startSound.currentTime = 0;
-    startSound.play().catch(() => {});
-
-    const voiceEnableCheck = document.getElementById('voice-enable');
-    if (voiceEnableCheck && voiceEnableCheck.checked) {
-        initiateVoiceConnections();
-    }
+    safePlaySound(startSound);
     
     requestAnimationFrame(gameLoop);
 }
@@ -185,7 +224,8 @@ socket.on('gs', (miniState) => {
 
     if (miniState.h === 1) {
         const snd = hitSounds[Math.floor(Math.random() * hitSounds.length)];
-        snd.currentTime = 0; snd.play().catch(() => {});
+        snd.currentTime = 0; 
+        safePlaySound(snd);
     }
 });
 
@@ -193,7 +233,10 @@ socket.on('goal', (char) => {
     goalScorerChar     = char;
     showGoalAnimation  = true;
     goalAnimationStart = performance.now();
-    setTimeout(() => { startSound.currentTime = 0; startSound.play().catch(() => {}); }, 2500);
+    setTimeout(() => { 
+        startSound.currentTime = 0; 
+        safePlaySound(startSound); 
+    }, 2500);
 });
 
 let eloChangeMsg = '';
@@ -216,9 +259,12 @@ socket.on('gameOver', (finalScore) => {
         else if (myTeam === 2 && finalScore.team2 < finalScore.team1) msg = 'ВЫ ПРОИГРАЛИ! 😭';
         else msg = 'Ничья!';
     }
+    
+    const pttBtn = document.getElementById('ptt-btn');
+    if (pttBtn) pttBtn.style.display = 'none';
+
     setTimeout(() => {
         alert(`${msg}\nИтоговый счет: ${finalScore.team1} : ${finalScore.team2}${eloChangeMsg}`);
-        stopMicrophone(); 
         location.reload();
     }, 500);
 });
@@ -271,7 +317,7 @@ function sendInput(pos, dragging) {
 }
 function handleStart(e) {
     if (isSpectator) return;
-    if (e.target.closest('#chat-container') || e.target.closest('#chat-toggle-btn')) return;
+    if (e.target.closest('#chat-container') || e.target.closest('#chat-toggle-btn') || e.target.closest('#ptt-btn')) return;
     const pos = getEventPos(e), myPlayer = gameState.players[socket.id];
     if (!myPlayer) return;
     const dx = pos.x - myPlayer.x, dy = pos.y - myPlayer.y;
@@ -380,177 +426,85 @@ function gameLoop(timestamp) {
 }
 
 // ============================================================
-// ГОЛОСОВИЙ ЧАТ ТА VOICE CHANGER
+// ГОЛОСОВИЙ ЧАТ: РЕЖИМ РАЦІЇ (PUSH-TO-TALK)
 // ============================================================
-let localAudioStream = null;
-let processedAudioStream = null;
-let audioContext = null;
-let peers = {}; 
-const rtcConfig = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+let mediaRecorder = null;
+let audioChunks = [];
+let isRecording = false;
+let recorderMimeType = '';
 
-async function getMicrophones() {
-    const select = document.getElementById('mic-select');
-    if (!select) return;
-
-    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        alert("🚨 БРАУЗЕР БЛОКУЄ МІКРОФОН!\n\nМікрофон працює лише якщо сайт відкрито через 'localhost' або 'https://'.");
-        document.getElementById('voice-enable').checked = false;
-        select.innerHTML = '<option value="">Мікрофон заблоковано</option>';
-        return;
-    }
-
+async function initWalkieTalkie() {
     try {
-        await navigator.mediaDevices.getUserMedia({ audio: true }); 
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const mics = devices.filter(d => d.kind === 'audioinput');
-        
-        if (mics.length === 0) {
-            select.innerHTML = '<option value="">Мікрофони не знайдені</option>';
-        } else {
-            select.innerHTML = mics.map(m => `<option value="${m.deviceId}">${m.label || 'Мікрофон ' + m.deviceId.substring(0,5)}</option>`).join('');
-        }
-    } catch (e) {
-        console.error('Помилка мікрофону:', e);
-        alert('Ви не надали доступ до мікрофона, або сталася помилка: ' + e.message);
-        document.getElementById('voice-enable').checked = false;
-        select.innerHTML = '<option value="">Доступ відхилено</option>';
-    }
-}
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        recorderMimeType = mediaRecorder.mimeType; 
 
-async function toggleVoice() {
-    if (document.getElementById('voice-enable').checked) {
-        await getMicrophones(); await startMicrophone();
-    } else {
-        stopMicrophone(); closeAllPeers();
-    }
-}
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) audioChunks.push(event.data);
+        };
 
-async function changeMicrophone()  { if (document.getElementById('voice-enable').checked) await startMicrophone(); }
-function changeVoiceEffect() { if (document.getElementById('voice-enable').checked) startMicrophone(); }
-
-function makeDistortionCurve(amount) {
-    let k = amount, n_samples = 44100, curve = new Float32Array(n_samples), deg = Math.PI / 180, i = 0, x;
-    for ( ; i < n_samples; ++i ) { x = i * 2 / n_samples - 1; curve[i] = ( 3 + k ) * x * 20 * deg / ( Math.PI + k * Math.abs(x) ); }
-    return curve;
-}
-
-async function startMicrophone() {
-    stopMicrophone();
-    const deviceId = document.getElementById('mic-select').value;
-    const effect = document.getElementById('voice-effect').value;
-    
-    try {
-        localAudioStream = await navigator.mediaDevices.getUserMedia({ 
-            audio: deviceId ? { deviceId: { exact: deviceId }, echoCancellation: true, noiseSuppression: true } : { echoCancellation: true } 
-        });
-
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(localAudioStream);
-        const destination = audioContext.createMediaStreamDestination();
-
-        if (effect === 'robot') {
-            const distortion = audioContext.createWaveShaper();
-            distortion.curve = makeDistortionCurve(400); 
-            const biquadFilter = audioContext.createBiquadFilter();
-            biquadFilter.type = "bandpass"; biquadFilter.frequency.value = 1000;
-            source.connect(distortion); distortion.connect(biquadFilter); biquadFilter.connect(destination);
-        } else if (effect === 'echo') {
-            const delay = audioContext.createDelay();
-            delay.delayTime.value = 0.2; 
-            const feedback = audioContext.createGain();
-            feedback.gain.value = 0.5; 
-            source.connect(delay); delay.connect(feedback); feedback.connect(delay);
-            source.connect(destination); delay.connect(destination);
-        } else if (effect === 'radio') {
-            const highpass = audioContext.createBiquadFilter(); highpass.type = "highpass"; highpass.frequency.value = 500;
-            const lowpass = audioContext.createBiquadFilter(); lowpass.type = "lowpass"; lowpass.frequency.value = 2500;
-            const distortion = audioContext.createWaveShaper(); distortion.curve = makeDistortionCurve(50);
-            source.connect(highpass); highpass.connect(lowpass); lowpass.connect(distortion); distortion.connect(destination);
-        } else {
-            source.connect(destination); 
-        }
-
-        processedAudioStream = destination.stream;
-        if (currentRoom) initiateVoiceConnections(); 
-        
-    } catch (e) {
-        console.error('Мікрофон не запущено:', e);
-        const voiceCb = document.getElementById('voice-enable');
-        if(voiceCb) voiceCb.checked = false;
-    }
-}
-
-function stopMicrophone() {
-    if (localAudioStream) localAudioStream.getTracks().forEach(t => t.stop());
-    if (audioContext) audioContext.close();
-}
-
-function createPeer(targetSocketId) {
-    const peer = new RTCPeerConnection(rtcConfig);
-    peers[targetSocketId] = peer;
-
-    if (processedAudioStream) processedAudioStream.getTracks().forEach(track => peer.addTrack(track, processedAudioStream));
-
-    peer.onicecandidate = (event) => {
-        if (event.candidate) socket.emit('webrtc-ice', { target: targetSocketId, candidate: event.candidate });
-    };
-
-    peer.ontrack = (event) => {
-        let audioEl = document.getElementById(`audio-${targetSocketId}`);
-        if (!audioEl) {
-            audioEl = document.createElement('audio');
-            audioEl.id = `audio-${targetSocketId}`;
-            audioEl.autoplay = true;
-            audioEl.playsInline = true; // Важливо для iOS!
-            document.body.appendChild(audioEl);
-        }
-        audioEl.srcObject = event.streams[0];
-        
-        // Примусовий запуск, щоб обійти блокування браузера
-        let playPromise = audioEl.play();
-        if (playPromise !== undefined) {
-            playPromise.catch(error => console.warn("Аудіо заблоковано браузером:", error));
-        }
-    };
-    return peer;
-}
-
-function initiateVoiceConnections() {
-    for (const id in gameState.players) {
-        if (id !== socket.id && !gameState.players[id].isBot) {
-            const peer = createPeer(id);
-            peer.createOffer().then(offer => {
-                peer.setLocalDescription(offer);
-                socket.emit('webrtc-offer', { target: id, sdp: offer });
+        mediaRecorder.onstop = () => {
+            if (audioChunks.length === 0 || !currentRoom) return;
+            const audioBlob = new Blob(audioChunks, { type: recorderMimeType });
+            socket.emit('voice-message', { 
+                roomId: currentRoom, 
+                sender: myUsername, 
+                audioBlob: audioBlob,
+                mimeType: recorderMimeType
             });
-        }
+            audioChunks = []; 
+        };
+
+        document.getElementById('btn-enable-mic').style.display = 'none';
+        document.getElementById('mic-status').innerText = "✅ Мікрофон готовий! В грі тисни 'V'";
+        document.getElementById('mic-status').style.color = "#00ff00";
+        
+    } catch (err) {
+        console.error("Помилка мікрофону:", err);
+        document.getElementById('mic-status').innerText = "❌ Доступ заборонено або немає мікрофона";
+        document.getElementById('mic-status').style.color = "#ff4d4d";
     }
 }
 
-function closeAllPeers() {
-    for (let id in peers) {
-        peers[id].close();
-        const audioEl = document.getElementById(`audio-${id}`);
-        if (audioEl) audioEl.remove();
-    }
-    peers = {};
+function startRecording() {
+    if (!mediaRecorder || isRecording) return;
+    isRecording = true;
+    audioChunks = [];
+    mediaRecorder.start();
+    
+    const btn = document.getElementById('ptt-btn');
+    if(btn) { btn.style.backgroundColor = "rgba(255, 0, 0, 0.7)"; btn.innerText = "🔴 Запис..."; }
 }
 
-socket.on('webrtc-offer', async (data) => {
-    const voiceEnableCheck = document.getElementById('voice-enable');
-    if (!voiceEnableCheck || !voiceEnableCheck.checked) return; 
+function stopRecording() {
+    if (!mediaRecorder || !isRecording) return;
+    isRecording = false;
+    mediaRecorder.stop();
+    
+    const btn = document.getElementById('ptt-btn');
+    if(btn) { btn.style.backgroundColor = "rgba(0, 0, 0, 0.7)"; btn.innerText = "🎙️ Утримуй (або тисни 'V')"; }
+}
 
-    const peer = createPeer(data.sender);
-    await peer.setRemoteDescription(new RTCSessionDescription(data.sdp));
-    const answer = await peer.createAnswer();
-    await peer.setLocalDescription(answer);
-    socket.emit('webrtc-answer', { target: data.sender, sdp: answer });
+// Обробка клавіш та мишки
+document.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'v' && !e.repeat && currentRoom) startRecording();
+});
+document.addEventListener('keyup', (e) => {
+    if (e.key.toLowerCase() === 'v' && currentRoom) stopRecording();
 });
 
-socket.on('webrtc-answer', async (data) => {
-    if (peers[data.sender]) await peers[data.sender].setRemoteDescription(new RTCSessionDescription(data.sdp));
-});
-
-socket.on('webrtc-ice', (data) => {
-    if (peers[data.sender]) peers[data.sender].addIceCandidate(new RTCIceCandidate(data.candidate)).catch(e => console.error(e));
+// Відтворення вхідних голосових повідомлень
+socket.on('voice-message', (data) => {
+    try {
+        const blob = new Blob([data.audioBlob], { type: data.mimeType });
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        
+        // Маленький візуальний ефект: хто говорить
+        floatingTexts.push({ x: WIDTH/2, y: 150, text: `🔊 ${data.sender}`, life: 120 });
+        
+        safePlaySound(audio);
+    } catch (e) {
+        console.error("Помилка відтворення:", e);
+    }
 });
