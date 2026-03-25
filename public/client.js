@@ -427,7 +427,7 @@ function gameLoop(timestamp) {
 }
 
 // ============================================================
-// ГОЛОСОВИЙ ЧАТ: РЕЖИМ РАЦІЇ З БРОНЬОВАНИМ ВІДТВОРЕННЯМ
+// ГОЛОСОВИЙ ЧАТ: РЕЖИМ РАЦІЇ (PUSH-TO-TALK)
 // ============================================================
 let mediaRecorder = null;
 let audioChunks = [];
@@ -444,13 +444,17 @@ async function initWalkieTalkie() {
             if (event.data.size > 0) audioChunks.push(event.data);
         };
 
-        mediaRecorder.onstop = () => {
+        // БРОНЕБІЙНА ПЕРЕДАЧА: Перетворюємо Blob у ArrayBuffer перед відправкою
+        mediaRecorder.onstop = async () => {
             if (audioChunks.length === 0 || !currentRoom) return;
+            
             const audioBlob = new Blob(audioChunks, { type: recorderMimeType });
+            const arrayBuffer = await audioBlob.arrayBuffer(); // Рятує від втрати даних!
+            
             socket.emit('voice-message', { 
                 roomId: currentRoom, 
                 sender: myUsername, 
-                audioBlob: audioBlob,
+                audioBlob: arrayBuffer, 
                 mimeType: recorderMimeType
             });
             audioChunks = []; 
@@ -480,7 +484,8 @@ function startRecording() {
 function stopRecording() {
     if (!mediaRecorder || !isRecording) return;
     isRecording = false;
-    mediaRecorder.stop();
+    // Даємо мікрофону долю секунди, щоб він точно зберіг кінець фрази
+    setTimeout(() => { mediaRecorder.stop(); }, 100);
     
     const btn = document.getElementById('ptt-btn');
     if(btn) { btn.style.backgroundColor = "rgba(0, 51, 102, 0.8)"; btn.innerText = "🎙️ Удерживай (или жми 'V')"; }
@@ -493,42 +498,28 @@ document.addEventListener('keyup', (e) => {
     if (e.key.toLowerCase() === 'v' && currentRoom) stopRecording();
 });
 
-// УНІВЕРСАЛЬНИЙ ДЕШИФРАТОР ВХІДНОГО ГОЛОСУ
+// ПРОСТИЙ ТА НАДІЙНИЙ ПЛЕЄР ВХІДНОГО ГОЛОСУ
 socket.on('voice-message', (data) => {
     try {
+        // Візуальне підтвердження, що дані прийшли
         floatingTexts.push({ x: WIDTH/2, y: 150, text: `🔊 Говорит: ${data.sender}`, life: 120 });
         
+        // Збираємо файл назад із ArrayBuffer
         const blob = new Blob([data.audioBlob], { type: data.mimeType });
+        const url = URL.createObjectURL(blob);
         
-        // Спроба 1: Професійний Web Audio API (ідеально перетравлює різні формати між ПК і планшетами)
-        if (audioCtx) {
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                audioCtx.decodeAudioData(e.target.result, (buffer) => {
-                    const source = audioCtx.createBufferSource();
-                    source.buffer = buffer;
-                    source.connect(audioCtx.destination);
-                    source.start(0);
-                }, (err) => {
-                    // Якщо не вийшло, переходимо до спроби 2
-                    playViaHtmlTag(blob);
-                });
-            };
-            reader.readAsArrayBuffer(blob);
-        } else {
-            // Спроба 2: Якщо Web Audio API недоступний, використовуємо прихований HTML плеєр
-            playViaHtmlTag(blob);
-        }
-
-        function playViaHtmlTag(audioBlob) {
-            const url = URL.createObjectURL(audioBlob);
-            const voicePlayer = document.getElementById('voice-player');
-            if (voicePlayer) {
-                voicePlayer.src = url;
-                safePlaySound(voicePlayer);
-            }
+        // Відтворюємо стандартним способом
+        const audio = new Audio(url);
+        audio.volume = 1.0;
+        
+        let playPromise = audio.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(e => {
+                console.warn("Браузер заблокував звук фонової вкладки:", e);
+            });
         }
     } catch (e) {
-        console.error("Помилка відтворення:", e);
+        console.error("Помилка відтворення аудіо:", e);
     }
+});
 });
