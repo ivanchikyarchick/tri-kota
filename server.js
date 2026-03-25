@@ -18,7 +18,7 @@ const PUCK_RADIUS   = 20;
 const FRICTION      = 0.992; // Адаптовано для 60 FPS
 const GOAL_HEIGHT   = 150;
 const WALL_PADDING  = 25;
-const MAX_PUCK_SPEED = 60;   // Збільшено ліміт швидкості
+const MAX_PUCK_SPEED = 50;   // Збільшено ліміт швидкості
 
 // ============================================================
 // СТАН СЕРВЕРА
